@@ -1,0 +1,8 @@
+{
+  "package_name": "pwnagotchi-applaunch",
+  "version": "0.1",
+  "revision": "m5stack1",
+  "app_name": "Pwnagotchi",
+  "bin_name": "pwnagotchi_app",
+  "description": "Pwnagotchi APPLaunch entry for CardputerZero"
+}
