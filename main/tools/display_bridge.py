@@ -130,8 +130,6 @@ def render_frame(state):
     draw = ImageDraw.Draw(img, "RGBA")
     white = (255, 255, 255, 255)
 
-    draw.rectangle([1, 1, WIDTH - 2, HEIGHT - 2], outline=white, width=1)
-
     uptime_str = uptime_label(state['uptime_s'])
     bat_label = "BAT --" if state['battery_pct'] <= 0 else f"BAT {state['battery_pct']}"
     draw.text((10, 10), f"CH {state['channel']}", font=TOP_FONT, fill=white)

@@ -206,13 +206,16 @@ def aggregate_state(args):
     if handshake_count > 0:
         mood = "happy"
     if service not in ("active", "running"):
-        mood = "broken"
+        mood = "sleep"
 
-    status = f"{cap_state} ch {channel or '--'} aps {ap_count}"
     if cap_state == "online" and (ap_count or client_count):
-        status = f"tracking {ap_count} aps / {client_count} cli"
+        status = f"scanning {ap_count} APs / {client_count} clients"
+    elif cap_state == "online":
+        status = "listening for Wi-Fi...  (•‿‿•)"
     elif service not in ("active", "running"):
-        status = f"{service} backend unavailable"
+        status = "paused - start service to scan"
+    else:
+        status = "connecting..."
 
     last_error = ""
     if service not in ("active", "running"):

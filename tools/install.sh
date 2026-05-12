@@ -54,4 +54,20 @@ sudo systemctl daemon-reload
 if [[ ! -x /usr/local/bin/pwnagotchi ]] || [[ ! -f /etc/systemd/system/${SERVICE_NAME}.service ]] && ! systemctl cat "${SERVICE_NAME}.service" >/dev/null 2>&1; then
     "$(dirname "$0")/bootstrap_pwnagotchi.sh"
 fi
+
+echo ""
+echo "=== WiFi Monitor Mode Note ==="
+echo "Pwnagotchi requires a WiFi interface that supports monitor mode."
+echo "The built-in WiFi on some boards (esp. BCM43439 on CM0) does NOT"
+echo "support monitor mode with stock firmware."
+echo ""
+echo "To enable monitor mode:"
+echo "  1. Use an external USB WiFi adapter (e.g. RTL8812AU, MT7612U)"
+echo "  2. Or install nexmon firmware patches (only for BCM43430/43436s/43455)"
+echo "     See: https://github.com/seemoo-lab/nexmon"
+echo ""
+echo "Without monitor mode, the app shows status but cannot scan Wi-Fi."
+echo "To use an external adapter, set PWNAGOTCHI_IFACE env var."
+echo ""
+
 echo "Installer complete for service: $SERVICE_NAME"

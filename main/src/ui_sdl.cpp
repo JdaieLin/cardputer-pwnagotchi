@@ -120,8 +120,6 @@ void UiSdl::render(const UiModel& model) {
     SDL_RenderClear(renderer_);
 
     SDL_SetRenderDrawColor(renderer_, 255, 255, 255, 255);
-    SDL_Rect border{18, 16, 444, 248};
-    SDL_RenderDrawRect(renderer_, &border);
 
     drawSdlText(renderer_, {28, 28, 70, 18}, "CH " + std::to_string(model.state.channel), {{255, 255, 255, 255}, 14.0f, true, false, false});
     drawSdlText(renderer_, {82, 28, 82, 18}, "APS " + std::to_string(model.state.ap_count), {{255, 255, 255, 255}, 14.0f, true, false, false});
