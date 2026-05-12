@@ -58,12 +58,19 @@ def nested_get(data, keys, default=None):
 
 def count_handshakes(path):
     root = pathlib.Path(path)
-    if not root.exists():
+    try:
+        if not root.exists():
+            return 0, ""
+    except PermissionError:
         return 0, ""
     count = 0
     latest = ""
     latest_ts = 0.0
-    for entry in root.rglob("*"):
+    try:
+        entries = list(root.rglob("*"))
+    except PermissionError:
+        return 0, ""
+    for entry in entries:
         if not entry.is_file():
             continue
         count += 1
@@ -85,7 +92,7 @@ def bettercap_state(url, username, password):
         with urllib.request.urlopen(req, timeout=1.2) as resp:
             raw = json.loads(resp.read().decode("utf-8", "ignore"))
     except Exception as exc:
-        return "offline", 0, 0, f"bettercap unavailable: {exc}"
+        return "offline", 0, 0, 0, f"bettercap unavailable: {exc}"
 
     ap_count = 0
     client_count = 0
@@ -110,16 +117,35 @@ def bettercap_state(url, username, password):
 
 
 def read_battery_pct():
-    candidates = [
-        "/sys/class/power_supply/BAT0/capacity",
-        "/sys/class/power_supply/battery/capacity",
-        "/sys/class/power_supply/max1720x_battery/capacity",
-    ]
-    for path in candidates:
+    ps_dir = "/sys/class/power_supply"
+    if os.path.isdir(ps_dir):
+        for name in os.listdir(ps_dir):
+            if name.startswith("."):
+                continue
+            cap_path = os.path.join(ps_dir, name, "capacity")
+            if os.path.exists(cap_path):
+                try:
+                    return int(pathlib.Path(cap_path).read_text().strip())
+                except Exception:
+                    continue
+
+    try:
+        import smbus2
+        bus = smbus2.SMBus(1)
         try:
-            return int(pathlib.Path(path).read_text().strip())
+            raw = bus.read_word_data(0x55, 0x2C)
+            soc = raw & 0xFF
+            if soc > 100:
+                soc = (raw >> 8) & 0xFF
+            if 0 <= soc <= 100:
+                return soc
         except Exception:
-            continue
+            pass
+        finally:
+            bus.close()
+    except Exception:
+        pass
+
     return 0
 
 
@@ -174,13 +200,13 @@ def aggregate_state(args):
     handshake_count, last_session = count_handshakes(args.handshakes_dir)
     battery_pct = read_battery_pct()
 
-    mood = "idle"
+    mood = "awake"
     if cap_state == "online":
-        mood = "listening-scanning"
+        mood = "cool"
     if handshake_count > 0:
-        mood = "happy-handshake"
+        mood = "happy"
     if service not in ("active", "running"):
-        mood = "error"
+        mood = "broken"
 
     status = f"{cap_state} ch {channel or '--'} aps {ap_count}"
     if cap_state == "online" and (ap_count or client_count):

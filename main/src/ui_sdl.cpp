@@ -29,10 +29,27 @@ std::vector<std::string> splitUtf8Glyphs(const std::string& text) {
 }
 
 std::string faceForMood(const std::string& mood) {
-    if (mood == "happy-handshake") return "(•‿‿•)";
-    if (mood == "listening-scanning") return "(⌐■_■)";
-    if (mood == "busy") return "(°▃▃°)";
-    if (mood == "error") return "(☓‿‿☓)";
+    if (mood == "awake" || mood == "idle") return "(◕‿‿◕)";
+    if (mood == "looking_r") return "( ⚆_⚆)";
+    if (mood == "looking_l") return "(☉_☉ )";
+    if (mood == "looking_r_happy") return "( ◕‿◕)";
+    if (mood == "looking_l_happy") return "(◕‿◕ )";
+    if (mood == "sleep" || mood == "sleep2") return "(⇀‿‿↼)";
+    if (mood == "bored") return "(-__-)";
+    if (mood == "intense" || mood == "busy") return "(°▃▃°)";
+    if (mood == "cool" || mood == "listening-scanning") return "(⌐■_■)";
+    if (mood == "happy" || mood == "happy-handshake" || mood == "grateful") return "(•‿‿•)";
+    if (mood == "excited" || mood == "motivated") return "(ᵔ◡◡ᵔ)";
+    if (mood == "demotivated") return "(≖__≖)";
+    if (mood == "smart") return "(✜‿‿✜)";
+    if (mood == "friend") return "(♥‿‿♥)";
+    if (mood == "lonely") return "(ب__ب)";
+    if (mood == "sad") return "(╥☁╥ )";
+    if (mood == "angry") return "(-_-')";
+    if (mood == "broken" || mood == "error") return "(☓‿‿☓)";
+    if (mood == "debug") return "(#__#)";
+    if (mood == "upload" || mood == "upload1") return "(1__0)";
+    if (mood == "upload2") return "(0__1)";
     return "(◕‿‿◕)";
 }
 
@@ -43,15 +60,17 @@ std::string modeLabel(const std::string& mode) {
 std::string uptimeLabel(long uptime_s) {
     const long hours = uptime_s / 3600;
     const long minutes = (uptime_s % 3600) / 60;
+    const long seconds = uptime_s % 60;
     std::ostringstream oss;
     oss << std::setw(2) << std::setfill('0') << hours
-        << ":" << std::setw(2) << std::setfill('0') << minutes;
+        << ":" << std::setw(2) << std::setfill('0') << minutes
+        << ":" << std::setw(2) << std::setfill('0') << seconds;
     return oss.str();
 }
 
 std::string pwnedLabel(int count) {
     std::ostringstream oss;
-    oss << "PWND " << count << " (" << std::setw(2) << std::setfill('0') << count << ")";
+    oss << "PWND " << count;
     return oss.str();
 }
 
@@ -97,26 +116,31 @@ void UiSdl::render(const UiModel& model) {
         return;
     }
 
-    SDL_SetRenderDrawColor(renderer_, 255, 255, 255, 255);
+    SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
     SDL_RenderClear(renderer_);
 
-    SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
+    SDL_SetRenderDrawColor(renderer_, 255, 255, 255, 255);
     SDL_Rect border{18, 16, 444, 248};
     SDL_RenderDrawRect(renderer_, &border);
 
-    drawSdlText(renderer_, {28, 24, 70, 18}, "CH " + std::to_string(model.state.channel), {{0, 0, 0, 255}, 14.0f, true, false, false});
-    drawSdlText(renderer_, {104, 24, 82, 18}, "APS " + std::to_string(model.state.ap_count), {{0, 0, 0, 255}, 14.0f, true, false, false});
-    drawSdlText(renderer_, {264, 24, 84, 18}, "BAT " + std::to_string(model.state.battery_pct), {{0, 0, 0, 255}, 14.0f, true, false, false});
-    drawSdlText(renderer_, {356, 24, 88, 18}, "UP " + uptimeLabel(model.state.uptime_s), {{0, 0, 0, 255}, 14.0f, true, false, false});
+    drawSdlText(renderer_, {28, 28, 70, 18}, "CH " + std::to_string(model.state.channel), {{255, 255, 255, 255}, 14.0f, true, false, false});
+    drawSdlText(renderer_, {82, 28, 82, 18}, "APS " + std::to_string(model.state.ap_count), {{255, 255, 255, 255}, 14.0f, true, false, false});
+    drawSdlText(renderer_, {172, 28, 84, 18}, (model.state.battery_pct > 0 ? "BAT " + std::to_string(model.state.battery_pct) : "BAT --"), {{255, 255, 255, 255}, 14.0f, true, false, false});
+    drawSdlText(renderer_, {344, 28, 100, 18}, "UP " + uptimeLabel(model.state.uptime_s), {{255, 255, 255, 255}, 14.0f, true, false, false});
 
-    drawSdlText(renderer_, {42, 78, 170, 66}, faceForMood(model.state.mood), {{0, 0, 0, 255}, 30.0f, true, true, false});
-    drawSdlText(renderer_, {236, 74, 180, 72}, marqueeText(model.action_message.empty() ? model.state.status_text : model.action_message), {{0, 0, 0, 255}, 16.0f, false, false, true});
+    drawSdlText(renderer_, {28, 46, 200, 18}, model.state.name + ">", {{255, 255, 255, 255}, 14.0f, true, false, false});
 
-    SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
+    SDL_SetRenderDrawColor(renderer_, 255, 255, 255, 255);
+    SDL_RenderDrawLine(renderer_, 30, 64, 448, 64);
+
+    drawSdlText(renderer_, {42, 78, 170, 66}, faceForMood(model.state.mood), {{255, 255, 255, 255}, 30.0f, true, true, false});
+    drawSdlText(renderer_, {236, 74, 180, 72}, marqueeText(model.action_message.empty() ? model.state.status_text : model.action_message), {{255, 255, 255, 255}, 16.0f, false, false, true});
+
+    SDL_SetRenderDrawColor(renderer_, 255, 255, 255, 255);
     SDL_RenderDrawLine(renderer_, 30, 188, 448, 188);
 
-    drawSdlText(renderer_, {30, 204, 220, 20}, pwnedLabel(model.state.handshake_count), {{0, 0, 0, 255}, 16.0f, true, false, false});
-    drawSdlText(renderer_, {360, 204, 76, 20}, modeLabel(model.state.mode), {{0, 0, 0, 255}, 16.0f, true, false, true});
+    drawSdlText(renderer_, {30, 204, 220, 20}, pwnedLabel(model.state.handshake_count), {{255, 255, 255, 255}, 16.0f, true, false, false});
+    drawSdlText(renderer_, {360, 204, 76, 20}, modeLabel(model.state.mode), {{255, 255, 255, 255}, 16.0f, true, false, true});
 
     SDL_RenderPresent(renderer_);
     saveSnapshotIfEnabled();

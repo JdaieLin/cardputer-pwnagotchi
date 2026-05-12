@@ -43,7 +43,7 @@ def img_to_rgb565(img):
         for x in range(img.width):
             r, g, b, a = pixels[x, y]
             if a < 128:
-                r, g, b = 255, 255, 255
+                r, g, b = 0, 0, 0
             rgb565 = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3)
             data.extend(struct.pack("<H", rgb565))
     return bytes(data)
@@ -51,11 +51,36 @@ def img_to_rgb565(img):
 
 def face_for_mood(mood):
     return {
+        "awake": "(◕‿‿◕)",
         "idle": "(◕‿‿◕)",
-        "listening-scanning": "(⌐■_■)",
-        "happy-handshake": "(•‿‿•)",
+        "looking_r": "( ⚆_⚆)",
+        "looking_l": "(☉_☉ )",
+        "looking_r_happy": "( ◕‿◕)",
+        "looking_l_happy": "(◕‿◕ )",
+        "sleep": "(⇀‿‿↼)",
+        "sleep2": "(≖‿‿≖)",
+        "bored": "(-__-)",
+        "intense": "(°▃▃°)",
         "busy": "(°▃▃°)",
+        "cool": "(⌐■_■)",
+        "listening-scanning": "(⌐■_■)",
+        "happy": "(•‿‿•)",
+        "happy-handshake": "(•‿‿•)",
+        "grateful": "(^‿‿^)",
+        "excited": "(ᵔ◡◡ᵔ)",
+        "motivated": "(☼‿‿☼)",
+        "demotivated": "(≖__≖)",
+        "smart": "(✜‿‿✜)",
+        "friend": "(♥‿‿♥)",
+        "lonely": "(ب__ب)",
+        "sad": "(╥☁╥ )",
+        "angry": "(-_-')",
+        "broken": "(☓‿‿☓)",
         "error": "(☓‿‿☓)",
+        "debug": "(#__#)",
+        "upload": "(1__0)",
+        "upload1": "(1__1)",
+        "upload2": "(0__1)",
     }.get(mood, "(◕‿‿◕)")
 
 
@@ -66,11 +91,12 @@ def mode_label(mode):
 def uptime_label(uptime_s):
     hours = uptime_s // 3600
     minutes = (uptime_s % 3600) // 60
-    return f"{hours:02d}:{minutes:02d}"
+    seconds = uptime_s % 60
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
 
 def pwned_label(count):
-    return f"PWND {count} ({count:02d})"
+    return f"PWND {count}"
 
 
 def wrap_text(text, font, max_width):
@@ -100,26 +126,37 @@ def render_frame(state):
         return None
     LAST_FRAME_KEY = frame_key
 
-    img = Image.new("RGBA", (WIDTH, HEIGHT), (255, 255, 255, 255))
+    img = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 255))
     draw = ImageDraw.Draw(img, "RGBA")
-    black = (0, 0, 0, 255)
+    white = (255, 255, 255, 255)
 
-    draw.rectangle([1, 1, WIDTH - 2, HEIGHT - 2], outline=black, width=1)
-    draw.text((10, 10), f"CH {state['channel']}", font=TOP_FONT, fill=black)
-    draw.text((76, 10), f"APS {state['ap_count']}", font=TOP_FONT, fill=black)
-    draw.text((200, 10), f"BAT {state['battery_pct']}", font=TOP_FONT, fill=black)
-    draw.text((258, 10), f"UP {uptime_label(state['uptime_s'])}", font=TOP_FONT, fill=black)
+    draw.rectangle([1, 1, WIDTH - 2, HEIGHT - 2], outline=white, width=1)
 
-    draw.text((18, 70), face_for_mood(state["mood"]), font=FACE_FONT, fill=black)
+    uptime_str = uptime_label(state['uptime_s'])
+    bat_label = "BAT --" if state['battery_pct'] <= 0 else f"BAT {state['battery_pct']}"
+    draw.text((10, 10), f"CH {state['channel']}", font=TOP_FONT, fill=white)
+    draw.text((56, 10), f"APS {state['ap_count']}", font=TOP_FONT, fill=white)
+    draw.text((118, 10), bat_label, font=TOP_FONT, fill=white)
+    up_bbox = TOP_FONT.getbbox(f"UP {uptime_str}")
+    up_width = up_bbox[2] - up_bbox[0]
+    draw.text((WIDTH - 12 - up_width, 10), f"UP {uptime_str}", font=TOP_FONT, fill=white)
+
+    name_str = f"{state['name']}>"
+    draw.text((10, 28), name_str, font=TOP_FONT, fill=white)
+
+    draw.line((10, 44, WIDTH - 10, 44), fill=white, width=1)
+
+    draw.text((18, 55), face_for_mood(state["mood"]), font=FACE_FONT, fill=white)
+    body_y = 50
     lines = wrap_text(state["action_message"] or state["status_text"], BODY_FONT, 128)
     for idx, line in enumerate(lines[:3]):
-        draw.text((176, 60 + idx * 18), line, font=BODY_FONT, fill=black)
+        draw.text((176, body_y + idx * 18), line, font=BODY_FONT, fill=white)
 
-    draw.line((10, 142, WIDTH - 10, 142), fill=black, width=1)
-    draw.text((12, 150), pwned_label(state["handshake_count"]), font=BOTTOM_FONT, fill=black)
+    draw.line((10, 142, WIDTH - 10, 142), fill=white, width=1)
+    draw.text((12, 150), pwned_label(state["handshake_count"]), font=BOTTOM_FONT, fill=white)
     mode_bbox = BOTTOM_FONT.getbbox(mode_label(state["mode"]))
     mode_width = mode_bbox[2] - mode_bbox[0]
-    draw.text((WIDTH - 12 - mode_width, 150), mode_label(state["mode"]), font=BOTTOM_FONT, fill=black)
+    draw.text((WIDTH - 12 - mode_width, 150), mode_label(state["mode"]), font=BOTTOM_FONT, fill=white)
     return img
 
 
