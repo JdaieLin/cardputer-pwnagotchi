@@ -19,13 +19,15 @@ mkdir -p \
     "$PKG_ROOT/usr/share/APPLaunch/applications" \
     "$PKG_ROOT/usr/share/APPLaunch/bin" \
     "$PKG_ROOT/usr/share/APPLaunch/share/images" \
-    "$PKG_ROOT/usr/share/APPLaunch/share/pwnagotchi"
+    "$PKG_ROOT/usr/share/APPLaunch/share/pwnagotchi" \
+    "$PKG_ROOT/usr/share/APPLaunch/share/pwnagotchi/nexmon"
 
 install -m 0755 "$BIN" "$PKG_ROOT/usr/share/APPLaunch/bin/pwnagotchi_app"
 install -m 0644 "$ROOT_DIR/main/tools/pwnagotchi_bridge.py" "$PKG_ROOT/usr/share/APPLaunch/share/pwnagotchi/pwnagotchi_bridge.py"
 install -m 0644 "$ROOT_DIR/main/tools/display_bridge.py" "$PKG_ROOT/usr/share/APPLaunch/share/pwnagotchi/display_bridge.py"
 install -m 0755 "$ROOT_DIR/tools/install.sh" "$PKG_ROOT/usr/share/APPLaunch/share/pwnagotchi/install.sh"
 install -m 0755 "$ROOT_DIR/tools/bootstrap_pwnagotchi.sh" "$PKG_ROOT/usr/share/APPLaunch/share/pwnagotchi/bootstrap_pwnagotchi.sh"
+install -m 0644 "$ROOT_DIR/nexmon/nexmon-patched-43439.bin" "$PKG_ROOT/usr/share/APPLaunch/share/pwnagotchi/nexmon/nexmon-patched-43439.bin"
 install -m 0644 "$ICON_SRC" "$PKG_ROOT/usr/share/APPLaunch/share/images/pwnagotchi.png"
 
 cat > "$PKG_ROOT/usr/share/APPLaunch/bin/pwnagotchi_launcher" <<'EOF'
@@ -45,14 +47,30 @@ export PWNAGOTCHI_DISPLAY_BRIDGE=/usr/share/APPLaunch/share/pwnagotchi/display_b
 export PWNAGOTCHI_FBDEV="$(detect_fbdev)"
 export PWNAGOTCHI_KEYBOARD_DEVICE="${APPLAUNCH_LINUX_KEYBOARD_DEVICE:-/dev/input/by-path/platform-3f804000.i2c-event}"
 
+resolve_log_dir() {
+    local shared_dir="/tmp/pwnagotchi_logs"
+    local fallback_dir="/tmp/pwnagotchi_logs_$(id -u)"
+    local probe_file=""
+
+    mkdir -p "$shared_dir" 2>/dev/null || true
+    probe_file="$shared_dir/.write-test-$$"
+    if touch "$probe_file" >/dev/null 2>&1; then
+        rm -f "$probe_file"
+        echo "$shared_dir"
+        return 0
+    fi
+
+    mkdir -p "$fallback_dir"
+    echo "$fallback_dir"
+}
+
 LOCK_DIR="/tmp/pwnagotchi_singleton.lock"
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
     exit 0
 fi
 trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT INT TERM
 
-LOG_DIR="/tmp/pwnagotchi_logs"
-mkdir -p "$LOG_DIR"
+LOG_DIR="$(resolve_log_dir)"
 LOG_FILE="$LOG_DIR/pwnagotchi_$(date +%Y%m%d_%H%M%S).log"
 
 {

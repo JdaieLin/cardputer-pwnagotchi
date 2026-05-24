@@ -116,18 +116,40 @@ def bettercap_state(url, username, password):
     return "online", ap_count, client_count, int(channel or 0), ""
 
 
+def bettercap_monitor_error(service_name):
+    result = sh(["journalctl", "-u", f"{service_name}.service", "-n", "80", "--no-pager"])
+    text = (result.stdout + result.stderr).lower()
+    if "operation not supported" in text and "initializing" in text:
+        return "monitor channel unsupported"
+    if "cannot create monitor interface" in text:
+        return "monitor interface unavailable"
+    if "executable file not found" in text and "iw" in text:
+        return "iw command unavailable"
+    return ""
+
+
 def read_battery_pct():
     ps_dir = "/sys/class/power_supply"
+    voltage_uv = 0
     if os.path.isdir(ps_dir):
         for name in os.listdir(ps_dir):
             if name.startswith("."):
                 continue
-            cap_path = os.path.join(ps_dir, name, "capacity")
+            base = os.path.join(ps_dir, name)
+            cap_path = os.path.join(base, "capacity")
             if os.path.exists(cap_path):
                 try:
-                    return int(pathlib.Path(cap_path).read_text().strip())
+                    value = int(pathlib.Path(cap_path).read_text().strip())
+                    if 0 <= value <= 100:
+                        return value
                 except Exception:
-                    continue
+                    pass
+            volt_path = os.path.join(base, "voltage_now")
+            if os.path.exists(volt_path):
+                try:
+                    voltage_uv = max(voltage_uv, int(pathlib.Path(volt_path).read_text().strip()))
+                except Exception:
+                    pass
 
     try:
         import smbus2
@@ -145,6 +167,30 @@ def read_battery_pct():
             bus.close()
     except Exception:
         pass
+
+    if voltage_uv > 0:
+        voltage_v = voltage_uv / 1_000_000.0
+        if voltage_v >= 4.20:
+            return 100
+        if voltage_v >= 4.10:
+            return 90
+        if voltage_v >= 4.00:
+            return 80
+        if voltage_v >= 3.92:
+            return 70
+        if voltage_v >= 3.86:
+            return 60
+        if voltage_v >= 3.80:
+            return 50
+        if voltage_v >= 3.74:
+            return 40
+        if voltage_v >= 3.68:
+            return 30
+        if voltage_v >= 3.62:
+            return 20
+        if voltage_v >= 3.56:
+            return 10
+        return 5
 
     return 0
 
@@ -197,6 +243,9 @@ def aggregate_state(args):
     cap_state, ap_count, client_count, channel, cap_error = bettercap_state(
         args.bettercap_api_url, args.bettercap_username, args.bettercap_password
     )
+    monitor_error = ""
+    if cap_state == "online" and not (ap_count or client_count):
+        monitor_error = bettercap_monitor_error("bettercap")
     handshake_count, last_session = count_handshakes(args.handshakes_dir)
     battery_pct = read_battery_pct()
 
@@ -208,7 +257,9 @@ def aggregate_state(args):
     if service not in ("active", "running"):
         mood = "sleep"
 
-    if cap_state == "online" and (ap_count or client_count):
+    if monitor_error:
+        status = monitor_error
+    elif cap_state == "online" and (ap_count or client_count):
         status = f"scanning {ap_count} APs / {client_count} clients"
     elif cap_state == "online":
         status = "listening for Wi-Fi...  (•‿‿•)"
@@ -220,6 +271,8 @@ def aggregate_state(args):
     last_error = ""
     if service not in ("active", "running"):
         last_error = f"service {service}"
+    elif monitor_error:
+        last_error = monitor_error
     elif cap_error:
         last_error = cap_error
 
