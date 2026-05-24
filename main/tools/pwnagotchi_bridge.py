@@ -142,6 +142,8 @@ def read_battery_pct():
                     value = int(pathlib.Path(cap_path).read_text().strip())
                     if 0 <= value <= 100:
                         return value
+                    if 100 < value <= 10000:
+                        return max(0, min(100, round(value / 65.0)))
                 except Exception:
                     pass
             volt_path = os.path.join(base, "voltage_now")
