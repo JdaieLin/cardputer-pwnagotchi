@@ -212,6 +212,53 @@ def read_mode_override():
     return ""
 
 
+def rotating_choice(options, period_s=20):
+    if not options:
+        return ""
+    index = int(time.monotonic() // period_s) % len(options)
+    return options[index]
+
+
+def personality_state(service, cap_state, ap_count, client_count, handshake_count, channel, monitor_error, cap_error):
+    if service not in ("active", "running") and cap_state != "online":
+        return "sleep", "ZzzzZZzzzzZzzz"
+    if monitor_error:
+        return "broken", monitor_error
+    if cap_state != "online":
+        return "sad", cap_error or "Where's everybody?!"
+    if handshake_count > 0:
+        return "happy-handshake", f"Cool, we got {handshake_count} handshake{'s' if handshake_count != 1 else ''}!"
+    if ap_count >= 40 and client_count >= 8:
+        return "excited", rotating_choice([
+            "So many networks!!!",
+            "I'm having so much fun!",
+            "I pwn therefore I am.",
+        ])
+    if client_count > 0:
+        return "intense", rotating_choice([
+            f"Watching {client_count} stations",
+            "My crime is curiosity ...",
+            f"CH {channel}: making friends",
+        ])
+    if ap_count >= 20:
+        return "motivated", rotating_choice([
+            f"Looking at {ap_count} APs",
+            "This is the best day of my life!",
+            "New day, new hunt!",
+        ])
+    if ap_count > 0:
+        return "awake", rotating_choice([
+            f"Looking around ({ap_count} APs)",
+            "...",
+            "Waiting for clients ...",
+        ])
+    return "bored", rotating_choice([
+        "I'm bored ...",
+        "Let's go for a walk!",
+        "Where's everybody?!",
+    ])
+
+
 def write_mode_override(mode):
     content = f'PWNAGOTCHI_MODE="{mode}"\n'
     pathlib.Path(MODE_ENV_FILE).write_text(content)
@@ -249,32 +296,24 @@ def aggregate_state(args):
     handshake_count, last_session = count_handshakes(args.handshakes_dir)
     battery_pct = read_battery_pct()
 
-    mood = "awake"
-    if cap_state == "online":
-        mood = "cool"
-    if handshake_count > 0:
-        mood = "happy"
-    if service not in ("active", "running"):
-        mood = "sleep"
-
-    if monitor_error:
-        status = monitor_error
-    elif cap_state == "online" and (ap_count or client_count):
-        status = f"scanning {ap_count} APs / {client_count} clients"
-    elif cap_state == "online":
-        status = "listening for Wi-Fi...  (•‿‿•)"
-    elif service not in ("active", "running"):
-        status = "paused - start service to scan"
-    else:
-        status = "connecting..."
-
     last_error = ""
-    if service not in ("active", "running"):
+    if service not in ("active", "running") and cap_state != "online":
         last_error = f"service {service}"
     elif monitor_error:
         last_error = monitor_error
     elif cap_error:
         last_error = cap_error
+
+    mood, status = personality_state(
+        service,
+        cap_state,
+        ap_count,
+        client_count,
+        handshake_count,
+        channel,
+        monitor_error,
+        cap_error,
+    )
 
     return {
         "name": name,
