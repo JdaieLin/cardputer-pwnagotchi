@@ -95,8 +95,11 @@ def uptime_label(uptime_s):
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
 
-def pwned_label(count):
-    return f"PWND {count}"
+def pwned_label(count, last_session=""):
+    label = f"PWND {count}"
+    if last_session:
+        label += f" [{last_session}]"
+    return label
 
 
 def wrap_text(text, font, max_width):
@@ -151,7 +154,7 @@ def render_frame(state):
         draw.text((176, body_y + idx * 18), line, font=BODY_FONT, fill=white)
 
     draw.line((10, 142, WIDTH - 10, 142), fill=white, width=1)
-    draw.text((12, 150), pwned_label(state["handshake_count"]), font=BOTTOM_FONT, fill=white)
+    draw.text((12, 150), pwned_label(state["handshake_count"], state.get("last_session", "")), font=BOTTOM_FONT, fill=white)
     mode_bbox = BOTTOM_FONT.getbbox(mode_label(state["mode"]))
     mode_width = mode_bbox[2] - mode_bbox[0]
     draw.text((WIDTH - 12 - mode_width, 150), mode_label(state["mode"]), font=BOTTOM_FONT, fill=white)

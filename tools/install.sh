@@ -306,11 +306,16 @@ WRAPPER
 configure_bettercap_caplets() {
     local mode_file="/etc/default/pwnagotchi-cardputer"
     local iface="${PWNAGOTCHI_IFACE:-wlan0mon}"
+    local handshakes_file="${PWNAGOTCHI_HANDSHAKES_FILE:-/home/pi/handshakes/bettercap-wifi-handshakes.pcap}"
     if [[ -f "$mode_file" ]]; then
         # shellcheck disable=SC1090
         source "$mode_file"
         iface="${PWNAGOTCHI_IFACE:-$iface}"
+        handshakes_file="${PWNAGOTCHI_HANDSHAKES_FILE:-$handshakes_file}"
     fi
+
+    sudo mkdir -p "$(dirname "$handshakes_file")"
+    sudo chown pi:pi "$(dirname "$handshakes_file")" 2>/dev/null || true
 
     for caplet in /usr/share/bettercap/caplets/pwnagotchi-auto.cap /usr/share/bettercap/caplets/pwnagotchi-manual.cap; do
         [[ -f "$caplet" ]] || continue
@@ -318,6 +323,12 @@ configure_bettercap_caplets() {
             sudo sed -i "s|^set wifi.interface .*|set wifi.interface $iface|" "$caplet"
         else
             echo "set wifi.interface $iface" | sudo tee -a "$caplet" >/dev/null
+        fi
+        sudo sed -i '/^set wifi.handshakes.file /d' "$caplet"
+        if grep -q '^wifi.recon on' "$caplet"; then
+            sudo sed -i "0,/^wifi.recon on/s|^wifi.recon on|set wifi.handshakes.file $handshakes_file\\nwifi.recon on|" "$caplet"
+        else
+            echo "set wifi.handshakes.file $handshakes_file" | sudo tee -a "$caplet" >/dev/null
         fi
     done
 }

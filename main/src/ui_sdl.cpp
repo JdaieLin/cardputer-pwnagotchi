@@ -68,9 +68,12 @@ std::string uptimeLabel(long uptime_s) {
     return oss.str();
 }
 
-std::string pwnedLabel(int count) {
+std::string pwnedLabel(int count, const std::string& last_session) {
     std::ostringstream oss;
     oss << "PWND " << count;
+    if (!last_session.empty()) {
+        oss << " [" << last_session << "]";
+    }
     return oss.str();
 }
 
@@ -137,7 +140,7 @@ void UiSdl::render(const UiModel& model) {
     SDL_SetRenderDrawColor(renderer_, 255, 255, 255, 255);
     SDL_RenderDrawLine(renderer_, 30, 188, 448, 188);
 
-    drawSdlText(renderer_, {30, 204, 220, 20}, pwnedLabel(model.state.handshake_count), {{255, 255, 255, 255}, 16.0f, true, false, false});
+    drawSdlText(renderer_, {30, 204, 300, 20}, pwnedLabel(model.state.handshake_count, model.state.last_session), {{255, 255, 255, 255}, 16.0f, true, false, false});
     drawSdlText(renderer_, {360, 204, 76, 20}, modeLabel(model.state.mode), {{255, 255, 255, 255}, 16.0f, true, false, true});
 
     SDL_RenderPresent(renderer_);

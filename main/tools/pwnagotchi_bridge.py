@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import base64
+import struct
 import json
 import os
 import pathlib
@@ -73,6 +74,15 @@ def count_handshakes(path):
     for entry in entries:
         if not entry.is_file():
             continue
+        if entry.suffix.lower() not in (".pcap", ".pcapng", ".22000", ".hccapx"):
+            continue
+        try:
+            size = entry.stat().st_size
+        except OSError:
+            continue
+        # A 24-byte pcap is just the global header, not a captured handshake.
+        if entry.suffix.lower() in (".pcap", ".pcapng") and size <= 24:
+            continue
         count += 1
         try:
             mtime = entry.stat().st_mtime
@@ -80,8 +90,134 @@ def count_handshakes(path):
             continue
         if mtime > latest_ts:
             latest_ts = mtime
-            latest = time.strftime("%Y-%m-%d %H:%M", time.localtime(mtime))
+            latest = extract_pcap_ssid(entry) or handshake_label_from_filename(entry) or time.strftime("%Y-%m-%d %H:%M", time.localtime(mtime))
     return count, latest
+
+
+def mac_addr(raw):
+    if len(raw) != 6:
+        return ""
+    return ":".join(f"{b:02x}" for b in raw)
+
+
+def bssid_for_data_frame(frame, fc):
+    to_ds = bool(fc & 0x0100)
+    from_ds = bool(fc & 0x0200)
+    if len(frame) < 24:
+        return ""
+    if not to_ds and not from_ds:
+        return mac_addr(frame[16:22])
+    if to_ds and not from_ds:
+        return mac_addr(frame[4:10])
+    if from_ds and not to_ds:
+        return mac_addr(frame[10:16])
+    if len(frame) >= 30:
+        return mac_addr(frame[24:30])
+    return ""
+
+
+def ssid_from_tags(tags):
+    idx = 0
+    while idx + 2 <= len(tags):
+        tag_id = tags[idx]
+        length = tags[idx + 1]
+        value = tags[idx + 2:idx + 2 + length]
+        if idx + 2 + length > len(tags):
+            break
+        if tag_id == 0:
+            try:
+                return value.decode("utf-8", "ignore").strip()
+            except UnicodeDecodeError:
+                return ""
+        idx += 2 + length
+    return ""
+
+
+def extract_pcap_ssid(entry):
+    if entry.suffix.lower() not in (".pcap", ".pcapng"):
+        return ""
+    try:
+        data = entry.read_bytes()
+    except (OSError, PermissionError):
+        return ""
+    if len(data) <= 24:
+        return ""
+    magic = data[:4]
+    if magic in (b"\xd4\xc3\xb2\xa1", b"\x4d\x3c\xb2\xa1"):
+        endian = "<"
+    elif magic in (b"\xa1\xb2\xc3\xd4", b"\xa1\xb2\x3c\x4d"):
+        endian = ">"
+    else:
+        return ""
+
+    offset = 24
+    bssid_to_ssid = {}
+    eapol_bssid = ""
+    while offset + 16 <= len(data):
+        try:
+            incl_len = struct.unpack(endian + "I", data[offset + 8:offset + 12])[0]
+        except struct.error:
+            break
+        offset += 16
+        packet = data[offset:offset + incl_len]
+        offset += incl_len
+        if len(packet) < 8:
+            continue
+        radiotap_len = struct.unpack_from("<H", packet, 2)[0]
+        if radiotap_len >= len(packet):
+            continue
+        frame = packet[radiotap_len:]
+        if len(frame) < 24:
+            continue
+        fc = struct.unpack_from("<H", frame, 0)[0]
+        frame_type = (fc >> 2) & 0x3
+        subtype = (fc >> 4) & 0xF
+        if frame_type == 0 and subtype in (5, 8):
+            ssid = ssid_from_tags(frame[36:])
+            if ssid:
+                bssid_to_ssid[mac_addr(frame[16:22])] = ssid
+        elif frame_type == 2 and b"\xaa\xaa\x03\x00\x00\x00\x88\x8e" in frame:
+            candidate = bssid_for_data_frame(frame, fc)
+            if candidate:
+                eapol_bssid = candidate
+
+    if eapol_bssid and eapol_bssid in bssid_to_ssid:
+        return bssid_to_ssid[eapol_bssid][:24]
+    return ""
+
+
+def handshake_label_from_filename(entry):
+    stem = entry.stem
+    if stem in ("bettercap-wifi-handshakes", "handshakes"):
+        return ""
+    for suffix in ("_handshake", "-handshake", ".handshake"):
+        stem = stem.replace(suffix, "")
+    stem = stem.replace("_", " ").replace("-", " ").strip()
+    if not stem or stem.lower().startswith("closed loop"):
+        return ""
+    return stem[:24]
+
+
+def recent_pwned_network():
+    result = sh(["journalctl", "-u", "bettercap.service", "-n", "240", "--no-pager"])
+    text = result.stdout + result.stderr
+    latest = ""
+    for line in text.splitlines():
+        if "handshake" in line.lower() and " for " in line:
+            candidate = line.rsplit(" for ", 1)[-1].split(" (", 1)[0].strip(" .")
+            if candidate:
+                latest = candidate
+    return latest[:24]
+
+
+def current_wifi_ssid():
+    result = sh(["nmcli", "-t", "-f", "ACTIVE,SSID", "dev", "wifi"])
+    for line in result.stdout.splitlines():
+        if line.startswith("yes:"):
+            ssid = line.split(":", 1)[1].replace("\\:", ":").strip()
+            if ssid:
+                return ssid[:24]
+    return ""
 
 
 def bettercap_state(url, username, password):
@@ -296,6 +432,11 @@ def aggregate_state(args):
     if cap_state == "online" and not (ap_count or client_count):
         monitor_error = bettercap_monitor_error("bettercap")
     handshake_count, last_session = count_handshakes(args.handshakes_dir)
+    recent_network = recent_pwned_network()
+    if recent_network:
+        last_session = recent_network
+    elif handshake_count > 0 and not last_session:
+        last_session = current_wifi_ssid()
     battery_pct = read_battery_pct()
 
     last_error = ""

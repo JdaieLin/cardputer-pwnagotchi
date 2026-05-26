@@ -44,6 +44,7 @@ detect_fbdev() {
 
 export PWNAGOTCHI_BRIDGE=/usr/share/APPLaunch/share/pwnagotchi/pwnagotchi_bridge.py
 export PWNAGOTCHI_DISPLAY_BRIDGE=/usr/share/APPLaunch/share/pwnagotchi/display_bridge.py
+export PWNAGOTCHI_HANDSHAKES_DIR=/home/pi/handshakes
 export PWNAGOTCHI_FBDEV="$(detect_fbdev)"
 export PWNAGOTCHI_KEYBOARD_DEVICE="${APPLAUNCH_LINUX_KEYBOARD_DEVICE:-/dev/input/by-path/platform-3f804000.i2c-event}"
 
