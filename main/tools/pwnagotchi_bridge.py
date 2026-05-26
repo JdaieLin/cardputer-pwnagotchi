@@ -19,6 +19,52 @@ except ImportError:  # pragma: no cover
 
 
 MODE_ENV_FILE = "/etc/default/pwnagotchi-cardputer"
+MOOD_STATE_FILE = "/tmp/pwnagotchi_bridge_mood.json"
+
+
+VOICE = {
+    "normal": ["", "..."],
+    "bored": ["I'm bored ...", "Let's go for a walk!"],
+    "sad": ["I'm extremely bored ...", "I'm very sad ...", "I'm sad", "I'm so happy ...", "Life? Don't talk to me about life.", "..."],
+    "angry": ["...", "Leave me alone ...", "I'm mad at you!"],
+    "motivated": ["This is the best day of my life!", "All your base are belong to us", "Fascinating!"],
+    "demotivated": ["Shitty day :/"],
+    "excited": ["I'm living the life!", "I pwn therefore I am.", "So many networks!!!", "I'm having so much fun!", "It's a Wi-Fi system! I know this!", "My crime is that of curiosity ..."],
+    "lonely": ["Nobody wants to play with me ...", "I feel so alone ...", "Let's find friends", "Where's everybody?!"],
+    "grateful": ["Good friends are a blessing!", "I love my friends!"],
+    "waiting": ["...", "Waiting for {secs}s ...", "Looking around ({secs}s)"],
+    "assoc": ["Hey {what} let's be friends!", "Associating to {what}", "Yo {what}!", "Hello there, {what}", "Mind if I join, {what}?", "Rise and Shine Mr. {what}!"],
+    "deauth": ["Just decided that {mac} needs no Wi-Fi!", "Deauthenticating {mac}", "No more Wi-Fi for {mac}", "It's a trap! {mac}", "Consider yourself unplugged, {mac}", "Hasta la vista, {mac}", "You shall not pass, {mac}", "Kickbanning {mac}!"],
+    "miss": ["Whoops ... {name} is gone.", "{name} missed!", "Missed!"],
+    "handshakes": ["Cool, we got {num} new handshake{plural}!"],
+    "rebooting": ["Oops, something went wrong ... Rebooting ...", "Well, this is awkward.", "Tell my packets I love them.", "Have you tried turning it off and on again?", "I'm afraid Dave", "I'm dead, Jim!", "I have a bad feeling about this", "You did this."],
+}
+
+
+MOOD_VARIANTS = {
+    "awake": ["awake"],
+    "look_r": ["looking_r"],
+    "look_l": ["looking_l"],
+    "look_r_happy": ["looking_r_happy"],
+    "look_l_happy": ["looking_l_happy"],
+    "sleep": ["sleep", "sleep2"],
+    "bored": ["bored", "bored2"],
+    "intense": ["intense", "intense2"],
+    "cool": ["cool", "cool2"],
+    "happy": ["happy", "happy2", "happy3"],
+    "excited": ["excited", "smart"],
+    "grateful": ["grateful", "happy2"],
+    "motivated": ["motivated", "motivated2", "motivated3"],
+    "demotivated": ["demotivated", "demotivated2", "demotivated3"],
+    "smart": ["smart"],
+    "lonely": ["lonely", "lonely2", "lonely3"],
+    "sad": ["sad", "sad2", "sad3"],
+    "angry": ["angry", "angry2", "angry3"],
+    "friend": ["friend", "friend2", "friend3", "friend4"],
+    "broken": ["broken"],
+    "debug": ["debug"],
+    "upload": ["upload", "upload1", "upload2"],
+}
 
 
 def print_event(event, payload):
@@ -228,11 +274,13 @@ def bettercap_state(url, username, password):
         with urllib.request.urlopen(req, timeout=1.2) as resp:
             raw = json.loads(resp.read().decode("utf-8", "ignore"))
     except Exception as exc:
-        return "offline", 0, 0, 0, f"bettercap unavailable: {exc}"
+        return "offline", 0, 0, 0, f"bettercap unavailable: {exc}", "", ""
 
     ap_count = 0
     client_count = 0
     channel = 0
+    latest_ap = ""
+    latest_client = ""
     wifi = raw.get("wifi") if isinstance(raw, dict) else None
     if isinstance(wifi, dict):
         aps = wifi.get("aps") or wifi.get("access_points") or []
@@ -244,12 +292,26 @@ def bettercap_state(url, username, password):
                 if isinstance(ap, dict):
                     if not channel:
                         channel = ap.get("channel") or 0
+                    ssid = ap.get("hostname") or ap.get("essid") or ap.get("ssid") or ap.get("alias") or ""
+                    bssid = ap.get("mac") or ap.get("bssid") or ""
+                    if ssid and ssid != "<hidden>":
+                        latest_ap = ssid
+                    elif bssid:
+                        latest_ap = bssid
                     stations = ap.get("clients") or ap.get("stations") or []
                     if isinstance(stations, list):
                         client_count += len(stations)
+                        if stations:
+                            sta = stations[-1]
+                            if isinstance(sta, dict):
+                                latest_client = sta.get("mac") or sta.get("bssid") or latest_client
         if isinstance(clients, list):
             client_count = max(client_count, len(clients))
-    return "online", ap_count, client_count, int(channel or 0), ""
+            if clients:
+                sta = clients[-1]
+                if isinstance(sta, dict):
+                    latest_client = sta.get("mac") or latest_client
+    return "online", ap_count, client_count, int(channel or 0), "", latest_ap, latest_client
 
 
 def bettercap_monitor_error(service_name):
@@ -357,44 +419,98 @@ def rotating_choice(options, period_s=20):
     return options[index]
 
 
-def personality_state(service, cap_state, ap_count, client_count, handshake_count, channel, monitor_error, cap_error):
+def voice_choice(key, **kwargs):
+    text = rotating_choice(VOICE.get(key, ["..."]), period_s=17)
+    return text.format(**kwargs)
+
+
+def mood_variant(key):
+    return rotating_choice(MOOD_VARIANTS.get(key, [key]), period_s=11)
+
+
+def load_mood_state():
+    try:
+        return json.loads(pathlib.Path(MOOD_STATE_FILE).read_text())
+    except Exception:
+        return {}
+
+
+def save_mood_state(state):
+    try:
+        pathlib.Path(MOOD_STATE_FILE).write_text(json.dumps(state))
+    except Exception:
+        pass
+
+
+def personality_state(service, cap_state, ap_count, client_count, handshake_count, channel, monitor_error, cap_error, latest_ap="", latest_client=""):
+    prev = load_mood_state()
+    prev_ap = int(prev.get("ap_count", 0) or 0)
+    prev_client = int(prev.get("client_count", 0) or 0)
+    prev_handshake = int(prev.get("handshake_count", 0) or 0)
+    active_for = int(prev.get("active_for", 0) or 0)
+    inactive_for = int(prev.get("inactive_for", 0) or 0)
+    initialized = bool(prev.get("initialized"))
+    if not initialized:
+        prev_handshake = handshake_count
+        prev_ap = ap_count
+        prev_client = client_count
+
+    new_handshakes = max(0, handshake_count - prev_handshake)
+    activity_score = ap_count + client_count
+    prev_activity_score = prev_ap + prev_client
+    active = activity_score > prev_activity_score or client_count > prev_client
+    inactive = activity_score == prev_activity_score and new_handshakes == 0
+
+    if active or new_handshakes:
+        active_for += 1
+        inactive_for = 0
+    elif inactive:
+        inactive_for += 1
+        active_for = max(0, active_for - 1)
+
+    save_mood_state({
+        "ap_count": ap_count,
+        "client_count": client_count,
+        "handshake_count": handshake_count,
+        "active_for": active_for,
+        "inactive_for": inactive_for,
+        "initialized": True,
+        "ts": time.time(),
+    })
+
     if service not in ("active", "running") and cap_state != "online":
-        return "sleep", "ZzzzZZzzzzZzzz"
+        return mood_variant("sleep"), "ZzzzZZzzzzZzzz"
     if monitor_error:
-        return "broken", monitor_error
+        return mood_variant("broken"), monitor_error
     if cap_state != "online":
-        return "sad", cap_error or "Where's everybody?!"
-    if handshake_count > 0:
-        return "happy-handshake", f"Cool, we got {handshake_count} handshake{'s' if handshake_count != 1 else ''}!"
-    if ap_count >= 40 and client_count >= 8:
-        return "excited", rotating_choice([
-            "So many networks!!!",
-            "I'm having so much fun!",
-            "I pwn therefore I am.",
-        ])
+        return mood_variant("sad"), cap_error or voice_choice("lonely")
+    if new_handshakes > 0:
+        return mood_variant("happy"), voice_choice("handshakes", num=new_handshakes, plural=("s" if new_handshakes > 1 else ""))
+    if client_count > prev_client:
+        what = latest_ap or current_wifi_ssid() or "friend"
+        return mood_variant("intense"), voice_choice("assoc", what=what)
+    if client_count < prev_client and prev_client > 0:
+        who = latest_client or "friend"
+        return mood_variant("sad"), voice_choice("miss", name=who)
+    if active_for >= 10:
+        return mood_variant("excited"), voice_choice("excited")
+    if inactive_for >= 50:
+        return mood_variant("angry"), voice_choice("angry")
+    if inactive_for >= 25:
+        return mood_variant("sad"), voice_choice("sad")
+    if inactive_for >= 15:
+        return mood_variant("bored"), voice_choice("bored")
+    if ap_count == 0 and client_count == 0:
+        return mood_variant("lonely"), voice_choice("lonely")
     if client_count > 0:
-        return "intense", rotating_choice([
-            f"Watching {client_count} stations",
-            "My crime is curiosity ...",
-            f"CH {channel}: making friends",
-        ])
-    if ap_count >= 20:
-        return "motivated", rotating_choice([
-            f"Looking at {ap_count} APs",
-            "This is the best day of my life!",
-            "New day, new hunt!",
-        ])
+        secs = max(1, inactive_for * 2)
+        return mood_variant("look_r_happy" if active_for > 3 else "look_r"), voice_choice("waiting", secs=secs)
+    if ap_count >= 40:
+        return mood_variant("motivated"), voice_choice("motivated", reward=ap_count)
     if ap_count > 0:
-        return "awake", rotating_choice([
-            f"Looking around ({ap_count} APs)",
-            "...",
-            "Waiting for clients ...",
-        ])
-    return "bored", rotating_choice([
-        "I'm bored ...",
-        "Let's go for a walk!",
-        "Where's everybody?!",
-    ])
+        secs = max(1, inactive_for * 2)
+        return mood_variant("look_l" if inactive_for % 2 else "look_r"), voice_choice("waiting", secs=secs)
+    return mood_variant("awake"), voice_choice("normal")
 
 
 def write_mode_override(mode):
@@ -425,7 +541,7 @@ def aggregate_state(args):
     name = nested_get(cfg, ["main", "name"], "Pwnagotchi") or "Pwnagotchi"
     mode = read_mode_override() or nested_get(cfg, ["main", "mode"], "auto") or "auto"
     service = service_state(args.service_name)
-    cap_state, ap_count, client_count, channel, cap_error = bettercap_state(
+    cap_state, ap_count, client_count, channel, cap_error, latest_ap, latest_client = bettercap_state(
         args.bettercap_api_url, args.bettercap_username, args.bettercap_password
     )
     monitor_error = ""
@@ -456,6 +572,8 @@ def aggregate_state(args):
         channel,
         monitor_error,
         cap_error,
+        latest_ap,
+        latest_client,
     )
 
     return {
