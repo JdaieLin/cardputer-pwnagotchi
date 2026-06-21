@@ -21,7 +21,9 @@
       "Utilities"
     ],
     "icon": "tools/assets/pwnagotchi.png",
-    "screenshots": [],
+    "screenshots": [
+      "store/screenshots/01-home.png"
+    ],
     "author": {
       "github": "JdaieLin",
       "display_name": "JdaieLin"
