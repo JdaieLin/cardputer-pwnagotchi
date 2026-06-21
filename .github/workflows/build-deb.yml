@@ -19,7 +19,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential pkg-config fakeroot dpkg-dev git curl gnu-tar \
+            build-essential pkg-config fakeroot dpkg-dev git curl \
             python3 python3-pip python3-pil \
             fonts-noto-cjk fonts-noto-color-emoji
 
