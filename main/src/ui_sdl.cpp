@@ -86,6 +86,19 @@ std::string uptimeLabel(long uptime_s) {
     return oss.str();
 }
 
+std::string channelLabel(int channel) {
+    std::ostringstream oss;
+    oss << "CH " << std::setw(2) << std::setfill('0') << channel;
+    return oss.str();
+}
+
+std::string apsLabel(int ap_count, int client_count) {
+    std::ostringstream oss;
+    oss << "APS " << ap_count << " ("
+        << std::setw(2) << std::setfill('0') << client_count << ")";
+    return oss.str();
+}
+
 std::string pwnedLabel(int count, const std::string& last_session) {
     std::ostringstream oss;
     oss << "PWND " << count;
@@ -142,24 +155,23 @@ void UiSdl::render(const UiModel& model) {
 
     SDL_SetRenderDrawColor(renderer_, 255, 255, 255, 255);
 
-    drawSdlText(renderer_, {28, 28, 70, 18}, "CH " + std::to_string(model.state.channel), {{255, 255, 255, 255}, 14.0f, true, false, false});
-    drawSdlText(renderer_, {82, 28, 82, 18}, "APS " + std::to_string(model.state.ap_count), {{255, 255, 255, 255}, 14.0f, true, false, false});
-    drawSdlText(renderer_, {172, 28, 84, 18}, (model.state.battery_pct > 0 ? "BAT " + std::to_string(model.state.battery_pct) : "BAT --"), {{255, 255, 255, 255}, 14.0f, true, false, false});
-    drawSdlText(renderer_, {344, 28, 100, 18}, "UP " + uptimeLabel(model.state.uptime_s), {{255, 255, 255, 255}, 14.0f, true, false, false});
-
-    drawSdlText(renderer_, {28, 46, 200, 18}, model.state.name + ">", {{255, 255, 255, 255}, 14.0f, true, false, false});
+    drawSdlText(renderer_, {28, 28, 70, 18}, channelLabel(model.state.channel), {{255, 255, 255, 255}, 13.0f, true, false, false});
+    drawSdlText(renderer_, {82, 28, 90, 18}, apsLabel(model.state.ap_count, model.state.client_count), {{255, 255, 255, 255}, 13.0f, true, false, false});
+    drawSdlText(renderer_, {184, 28, 84, 18}, (model.state.battery_pct > 0 ? "BAT " + std::to_string(model.state.battery_pct) : "BAT --"), {{255, 255, 255, 255}, 13.0f, true, false, false});
+    drawSdlText(renderer_, {344, 28, 100, 18}, "UP " + uptimeLabel(model.state.uptime_s), {{255, 255, 255, 255}, 13.0f, true, false, false});
 
     SDL_SetRenderDrawColor(renderer_, 255, 255, 255, 255);
-    SDL_RenderDrawLine(renderer_, 30, 64, 448, 64);
+    SDL_RenderDrawLine(renderer_, 30, 51, 448, 51);
+    drawSdlText(renderer_, {28, 56, 200, 18}, "pwnagotchi>", {{255, 255, 255, 255}, 13.0f, true, false, false});
 
     drawSdlText(renderer_, {42, 78, 170, 66}, faceForMood(model.state.mood), {{255, 255, 255, 255}, 30.0f, true, true, false});
-    drawSdlText(renderer_, {236, 74, 180, 72}, marqueeText(model.action_message.empty() ? model.state.status_text : model.action_message), {{255, 255, 255, 255}, 16.0f, false, false, true});
+    drawSdlText(renderer_, {236, 74, 180, 72}, marqueeText(model.action_message.empty() ? model.state.status_text : model.action_message), {{255, 255, 255, 255}, 14.0f, false, false, true});
 
     SDL_SetRenderDrawColor(renderer_, 255, 255, 255, 255);
     SDL_RenderDrawLine(renderer_, 30, 188, 448, 188);
 
-    drawSdlText(renderer_, {30, 204, 300, 20}, pwnedLabel(model.state.handshake_count, model.state.last_session), {{255, 255, 255, 255}, 16.0f, true, false, false});
-    drawSdlText(renderer_, {360, 204, 76, 20}, modeLabel(model.state.mode), {{255, 255, 255, 255}, 16.0f, true, false, true});
+    drawSdlText(renderer_, {30, 204, 300, 20}, pwnedLabel(model.state.handshake_count, model.state.last_session), {{255, 255, 255, 255}, 13.0f, true, false, false});
+    drawSdlText(renderer_, {360, 204, 76, 20}, modeLabel(model.state.mode), {{255, 255, 255, 255}, 13.0f, true, false, true});
 
     SDL_RenderPresent(renderer_);
     saveSnapshotIfEnabled();

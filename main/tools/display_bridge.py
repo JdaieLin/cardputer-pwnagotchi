@@ -31,12 +31,11 @@ def find_font(candidates):
 
 FONT_PATH = find_font(TEXT_FONT_CANDIDATES)
 FACE_FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf" if os.path.exists("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf") else FONT_PATH
-TOP_FONT = ImageFont.truetype(FONT_PATH, 14)
-BODY_FONT = ImageFont.truetype(FONT_PATH, 16)
-FACE_FONT = ImageFont.truetype(FACE_FONT_PATH, 25)
-BOTTOM_FONT = ImageFont.truetype(FONT_PATH, 16)
+TOP_FONT = ImageFont.truetype(FONT_PATH, 13)
+BODY_FONT = ImageFont.truetype(FONT_PATH, 14)
+FACE_FONT = ImageFont.truetype(FACE_FONT_PATH, 26)
+BOTTOM_FONT = ImageFont.truetype(FONT_PATH, 13)
 LAST_FRAME_KEY = None
-
 
 def img_to_rgb565(img):
     data = bytearray()
@@ -115,6 +114,16 @@ def uptime_label(uptime_s):
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
 
+def channel_label(channel):
+    if isinstance(channel, int):
+        return f"CH {channel:02d}"
+    return f"CH {channel}"
+
+
+def aps_label(ap_count, client_count):
+    return f"APS {ap_count} ({client_count:02d})"
+
+
 def pwned_label(count, last_session=""):
     label = f"PWND {count}"
     if last_session:
@@ -155,17 +164,15 @@ def render_frame(state):
 
     uptime_str = uptime_label(state['uptime_s'])
     bat_label = "BAT --" if state['battery_pct'] <= 0 else f"BAT {state['battery_pct']}"
-    draw.text((10, 10), f"CH {state['channel']}", font=TOP_FONT, fill=white)
-    draw.text((56, 10), f"APS {state['ap_count']}", font=TOP_FONT, fill=white)
-    draw.text((118, 10), bat_label, font=TOP_FONT, fill=white)
+    draw.text((10, 10), channel_label(state['channel']), font=TOP_FONT, fill=white)
+    draw.text((56, 10), aps_label(state['ap_count'], state.get('client_count', 0)), font=TOP_FONT, fill=white)
+    draw.text((136, 10), bat_label, font=TOP_FONT, fill=white)
     up_bbox = TOP_FONT.getbbox(f"UP {uptime_str}")
     up_width = up_bbox[2] - up_bbox[0]
     draw.text((WIDTH - 12 - up_width, 10), f"UP {uptime_str}", font=TOP_FONT, fill=white)
 
-    name_str = f"{state['name']}>"
-    draw.text((10, 28), name_str, font=TOP_FONT, fill=white)
-
-    draw.line((10, 44, WIDTH - 10, 44), fill=white, width=1)
+    draw.line((10, 29, WIDTH - 10, 29), fill=white, width=1)
+    draw.text((10, 33), "pwnagotchi>", font=TOP_FONT, fill=white)
 
     draw.text((18, 55), face_for_mood(state["mood"]), font=FACE_FONT, fill=white)
     body_y = 50
