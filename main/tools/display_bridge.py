@@ -12,6 +12,8 @@ WIDTH = int(os.environ.get("PWNAGOTCHI_FB_WIDTH", "320"))
 HEIGHT = int(os.environ.get("PWNAGOTCHI_FB_HEIGHT", "170"))
 
 TEXT_FONT_CANDIDATES = [
+    "/usr/share/APPLaunch/share/pwnagotchi/fonts/NotoSansSC-Bold.ttf",
+    "/usr/share/APPLaunch/share/pwnagotchi/fonts/NotoSansSC-Regular.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
     "/usr/share/fonts/truetype/pwnagotchi/NotoSansSC-Bold.ttf",
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",

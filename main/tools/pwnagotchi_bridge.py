@@ -514,8 +514,27 @@ def personality_state(service, cap_state, ap_count, client_count, handshake_coun
 
 
 def write_mode_override(mode):
-    content = f'PWNAGOTCHI_MODE="{mode}"\n'
-    pathlib.Path(MODE_ENV_FILE).write_text(content)
+    env = {}
+    path = pathlib.Path(MODE_ENV_FILE)
+    if path.exists():
+        for line in path.read_text().splitlines():
+            if not line or line.lstrip().startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            env[key.strip()] = value.strip().strip('"')
+    env.setdefault("PWNAGOTCHI_SOURCE_IFACE", "wlan1")
+    env.setdefault("PWNAGOTCHI_IFACE", "wlan1mon")
+    env.setdefault("PWNAGOTCHI_HANDSHAKES_FILE", "/home/pi/handshakes/bettercap-wifi-handshakes.pcap")
+    env["PWNAGOTCHI_MODE"] = mode
+    ordered = [
+        "PWNAGOTCHI_SOURCE_IFACE",
+        "PWNAGOTCHI_IFACE",
+        "PWNAGOTCHI_MODE",
+        "PWNAGOTCHI_HANDSHAKES_FILE",
+    ]
+    lines = [f'{key}="{env[key]}"' for key in ordered if key in env]
+    lines.extend(f'{key}="{value}"' for key, value in sorted(env.items()) if key not in ordered)
+    path.write_text("\n".join(lines) + "\n")
 
 
 def action_service(service_name, action):

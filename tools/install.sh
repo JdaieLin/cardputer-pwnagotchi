@@ -3,122 +3,16 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+SKIP_APT="${PWNAGOTCHI_INSTALL_SKIP_APT:-0}"
 FONT_DIR="/usr/share/fonts/truetype/pwnagotchi"
 SERVICE_NAME="${PWNAGOTCHI_SERVICE_NAME:-pwnagotchi}"
-NEXMON_MODE="${PWNAGOTCHI_NEXMON_MODE:-auto}"
-NEXMON_PATCH_VERSION="7.95.49 (2271bb6 CY)"
-NEXMON_PATCH_LOCAL="${PWNAGOTCHI_NEXMON_PATCH:-}"
-NEXMON_FIRMWARE_TARGET="/lib/firmware/brcm/brcmfmac43439-sdio.bin"
-NEXMON_FIRMWARE_BACKUP="/lib/firmware/brcm/brcmfmac43439-sdio.bin.orig"
-NEXMON_FW_URL="https://kali.download/kali/pool/non-free-firmware/f/firmware-nexmon/firmware-nexmon_0.2_all.deb"
-NEXMON_DKMS_URL="https://kali.download/kali/pool/contrib/b/brcmfmac-nexmon-dkms/brcmfmac-nexmon-dkms_6.12.2_all.deb"
-
-resolve_nexmon_firmware() {
-    if [[ -n "$NEXMON_PATCH_LOCAL" && -f "$NEXMON_PATCH_LOCAL" ]]; then
-        return 0
+BUNDLED_FONTS=""
+for d in "$SCRIPT_DIR/fonts" "/usr/share/APPLaunch/share/pwnagotchi/fonts"; do
+    if [[ -d "$d" && -n "$(ls -A "$d" 2>/dev/null)" ]]; then
+        BUNDLED_FONTS="$d"
+        break
     fi
-
-    for candidate in \
-        "$SCRIPT_DIR/nexmon/nexmon-patched-43439.bin" \
-        "$ROOT_DIR/nexmon/nexmon-patched-43439.bin"; do
-        if [[ -f "$candidate" ]]; then
-            NEXMON_PATCH_LOCAL="$candidate"
-            return 0
-        fi
-    done
-
-    echo "No local nexmon firmware found; downloading from Kali repository..."
-    local tmp_dir="/tmp/nexmon-fw-install"
-    rm -rf "$tmp_dir"
-    mkdir -p "$tmp_dir"
-    if ! curl -fsSL -o "$tmp_dir/firmware-nexmon.deb" "$NEXMON_FW_URL"; then
-        echo "Warning: failed to download nexmon firmware package."
-        return 1
-    fi
-    (cd "$tmp_dir" && ar x firmware-nexmon.deb && tar -xf data.tar.*)
-    local combined="$tmp_dir/usr/lib/firmware/cypress/43439A0-7.95.49.00.combined"
-    if [[ -f "$combined" ]]; then
-        NEXMON_PATCH_LOCAL="$combined"
-        return 0
-    fi
-    echo "Warning: downloaded package did not contain expected firmware."
-    return 1
-}
-
-install_nexmon_dkms() {
-    if lsmod | grep -q brcmfmac && modinfo brcmfmac 2>/dev/null | grep -q nexmon; then
-        echo "Nexmon DKMS module already installed."
-        return 0
-    fi
-
-    echo "Installing nexmon DKMS kernel module..."
-    sudo apt-get install -y dkms raspberrypi-kernel-headers 2>/dev/null || true
-
-    if ! dpkg -s brcmfmac-nexmon-dkms >/dev/null 2>&1; then
-        local tmp_deb="/tmp/brcmfmac-nexmon-dkms.deb"
-        if curl -fsSL -o "$tmp_deb" "$NEXMON_DKMS_URL"; then
-            sudo dpkg -i "$tmp_deb" 2>&1 || sudo apt-get install -f -y 2>&1 || true
-            rm -f "$tmp_deb"
-        else
-            echo "Warning: failed to download nexmon DKMS module."
-        fi
-    fi
-}
-
-install_nexmon_patch() {
-    if [[ "$NEXMON_MODE" == "off" ]]; then
-        echo "Skipping nexmon patch install (PWNAGOTCHI_NEXMON_MODE=off)."
-        return 0
-    fi
-
-    if [[ ! -f "$NEXMON_FIRMWARE_TARGET" ]]; then
-        echo "No BCM43439 firmware found at $NEXMON_FIRMWARE_TARGET; skipping."
-        return 0
-    fi
-
-    local current_version
-    current_version="$(strings "$NEXMON_FIRMWARE_TARGET" 2>/dev/null | grep -m1 'Version: 7\.95\.' || true)"
-
-    if [[ -n "$current_version" && "$current_version" == *"$NEXMON_PATCH_VERSION"* ]]; then
-        echo "BCM43439 firmware already matches nexmon patch version; skipping."
-        return 0
-    fi
-
-    if ! resolve_nexmon_firmware; then
-        echo "No nexmon firmware available; skipping patch."
-        return 0
-    fi
-
-    echo "Installing BCM43439 nexmon monitor-mode firmware..."
-    echo "  current: ${current_version:-unknown}"
-    echo "  target:  $NEXMON_PATCH_VERSION"
-
-    local real_target
-    real_target="$(readlink -f "$NEXMON_FIRMWARE_TARGET" 2>/dev/null || echo "$NEXMON_FIRMWARE_TARGET")"
-
-    if [[ ! -f "$NEXMON_FIRMWARE_BACKUP" ]]; then
-        sudo cp "$real_target" "$NEXMON_FIRMWARE_BACKUP"
-        echo "  backup:  $NEXMON_FIRMWARE_BACKUP"
-    fi
-
-    if [[ -L "$NEXMON_FIRMWARE_TARGET" ]]; then
-        sudo rm -f "$NEXMON_FIRMWARE_TARGET"
-    fi
-    sudo cp "$NEXMON_PATCH_LOCAL" "$NEXMON_FIRMWARE_TARGET"
-    sudo chmod 0644 "$NEXMON_FIRMWARE_TARGET"
-
-    for variant in /lib/firmware/brcm/brcmfmac43439-sdio.raspberrypi,*.bin; do
-        [[ -e "$variant" ]] || continue
-        if [[ -L "$variant" ]]; then
-            sudo rm -f "$variant"
-            sudo cp "$NEXMON_PATCH_LOCAL" "$variant"
-            sudo chmod 0644 "$variant"
-        fi
-    done
-
-    install_nexmon_dkms
-    echo "Installed nexmon firmware. A reboot is required to activate monitor mode."
-}
+done
 
 install_systemd_safeguards() {
     echo "Installing systemd safeguards for all pwnagotchi services..."
@@ -284,8 +178,7 @@ setup_monitor_interface() {
         sleep \$RETRY_DELAY
     done
 
-    echo "[bettercap-launch] ERROR: Cannot create monitor interface. Is nexmon firmware installed?"
-    echo "[bettercap-launch] Run: PWNAGOTCHI_NEXMON_MODE=force /path/to/install.sh"
+    echo "[bettercap-launch] ERROR: Cannot create monitor interface. Use a monitor-capable USB Wi-Fi adapter."
     return 1
 }
 
@@ -333,12 +226,35 @@ configure_bettercap_caplets() {
     done
 }
 
+ensure_cardputer_defaults() {
+    local mode_file="/etc/default/pwnagotchi-cardputer"
+    sudo touch "$mode_file"
+    if ! grep -q '^PWNAGOTCHI_SOURCE_IFACE=' "$mode_file"; then
+        echo 'PWNAGOTCHI_SOURCE_IFACE=wlan1' | sudo tee -a "$mode_file" >/dev/null
+    fi
+    if ! grep -q '^PWNAGOTCHI_IFACE=' "$mode_file"; then
+        echo 'PWNAGOTCHI_IFACE=wlan1mon' | sudo tee -a "$mode_file" >/dev/null
+    fi
+    if ! grep -q '^PWNAGOTCHI_MODE=' "$mode_file"; then
+        echo 'PWNAGOTCHI_MODE=auto' | sudo tee -a "$mode_file" >/dev/null
+    fi
+    if ! grep -q '^PWNAGOTCHI_HANDSHAKES_FILE=' "$mode_file"; then
+        echo 'PWNAGOTCHI_HANDSHAKES_FILE=/home/pi/handshakes/bettercap-wifi-handshakes.pcap' | sudo tee -a "$mode_file" >/dev/null
+    fi
+}
+
 install_pwnagotchi_launcher() {
     echo "Installing pwnagotchi launcher..."
 
-    sudo tee /usr/local/bin/pwnagotchi-cardputer-launch >/dev/null <<'EOF'
+sudo tee /usr/local/bin/pwnagotchi-cardputer-launch >/dev/null <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+
+MODE_FILE=/etc/default/pwnagotchi-cardputer
+if [[ -f "$MODE_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$MODE_FILE"
+fi
 
 MAX_WAIT=30
 waited=0
@@ -352,14 +268,9 @@ while ! ip link show "$IFACE" >/dev/null 2>&1; do
     waited=$((waited + 2))
 done
 
-MODE_FILE=/etc/default/pwnagotchi-cardputer
 MODE_ARG=""
-if [[ -f "$MODE_FILE" ]]; then
-    # shellcheck disable=SC1090
-    source "$MODE_FILE"
-    if [[ "${PWNAGOTCHI_MODE:-}" == "manual" ]]; then
-        MODE_ARG="--manual"
-    fi
+if [[ "${PWNAGOTCHI_MODE:-}" == "manual" ]]; then
+    MODE_ARG="--manual"
 fi
 exec /usr/local/bin/pwnagotchi $MODE_ARG
 EOF
@@ -368,15 +279,24 @@ EOF
 
 echo "=== Pwnagotchi App Launcher installer ==="
 
-sudo apt-get update -qq
-sudo apt-get install -y python3 python3-pil curl fonts-noto-cjk fonts-noto-color-emoji binutils iw wireless-tools
+SYSTEM_PKGS="python3 python3-pil curl fonts-noto-cjk fonts-noto-color-emoji binutils iw wireless-tools rfkill"
+if [[ "$SKIP_APT" == "1" ]]; then
+    echo "Skipping apt during package configuration; expected packages: $SYSTEM_PKGS"
+else
+    sudo apt-get update -qq
+    sudo apt-get install -y $SYSTEM_PKGS
+fi
 
 sudo mkdir -p "$FONT_DIR"
-if [[ ! -f "$FONT_DIR/NotoSansSC-Bold.ttf" ]]; then
+if [[ ! -f "$FONT_DIR/NotoSansSC-Bold.ttf" && -n "$BUNDLED_FONTS" && -f "$BUNDLED_FONTS/NotoSansSC-Bold.ttf" ]]; then
+    sudo cp "$BUNDLED_FONTS/NotoSansSC-Bold.ttf" "$FONT_DIR/NotoSansSC-Bold.ttf"
+elif [[ ! -f "$FONT_DIR/NotoSansSC-Bold.ttf" && "$SKIP_APT" != "1" ]]; then
     sudo curl -fsSLo "$FONT_DIR/NotoSansSC-Bold.ttf" \
         "https://github.com/google/fonts/raw/main/ofl/notosanssc/static/NotoSansSC-Bold.ttf" || true
 fi
-if [[ ! -f "$FONT_DIR/NotoColorEmoji.ttf" ]]; then
+if [[ ! -f "$FONT_DIR/NotoColorEmoji.ttf" && -n "$BUNDLED_FONTS" && -f "$BUNDLED_FONTS/NotoColorEmoji.ttf" ]]; then
+    sudo cp "$BUNDLED_FONTS/NotoColorEmoji.ttf" "$FONT_DIR/NotoColorEmoji.ttf"
+elif [[ ! -f "$FONT_DIR/NotoColorEmoji.ttf" && "$SKIP_APT" != "1" ]]; then
     sudo curl -fsSLo "$FONT_DIR/NotoColorEmoji.ttf" \
         "https://github.com/google/fonts/raw/main/ofl/notocoloremoji/NotoColorEmoji%5Bwght%5D.ttf" || true
 fi
@@ -388,7 +308,7 @@ if [[ ! -f "$FONT_DIR/NotoColorEmoji.ttf" && -f /usr/share/fonts/truetype/noto/N
 fi
 command -v fc-cache >/dev/null 2>&1 && sudo fc-cache -f "$FONT_DIR" || true
 
-sudo touch /etc/default/pwnagotchi-cardputer
+ensure_cardputer_defaults
 
 if [[ ! -x /usr/local/bin/pwnagotchi ]] || { [[ ! -f /etc/systemd/system/${SERVICE_NAME}.service ]] && ! systemctl cat "${SERVICE_NAME}.service" >/dev/null 2>&1; }; then
     "$SCRIPT_DIR/bootstrap_pwnagotchi.sh"
@@ -398,16 +318,10 @@ install_pwnagotchi_launcher
 install_bettercap_wrapper
 configure_bettercap_caplets
 install_systemd_safeguards
-install_nexmon_patch
 
 echo ""
 echo "=== Installation Summary ==="
 echo "Service: $SERVICE_NAME"
-if strings "$NEXMON_FIRMWARE_TARGET" 2>/dev/null | grep -q "$NEXMON_PATCH_VERSION"; then
-    echo "Nexmon: installed (reboot to activate if newly installed)"
-else
-    echo "Nexmon: NOT installed — monitor mode unavailable"
-    echo "  To force install: PWNAGOTCHI_NEXMON_MODE=force $0"
-fi
+echo "Monitor interface: configure PWNAGOTCHI_SOURCE_IFACE/PWNAGOTCHI_IFACE for a USB adapter"
 echo ""
 echo "Installer complete."
