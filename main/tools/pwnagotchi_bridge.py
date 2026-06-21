@@ -267,12 +267,16 @@ def current_wifi_ssid():
 
 
 def bettercap_state(url, username, password):
-    req = urllib.request.Request(url.rstrip("/") + "/session")
     token = base64.b64encode(f"{username}:{password}".encode()).decode()
-    req.add_header("Authorization", f"Basic {token}")
-    try:
+
+    def get_json(path):
+        req = urllib.request.Request(url.rstrip("/") + path)
+        req.add_header("Authorization", f"Basic {token}")
         with urllib.request.urlopen(req, timeout=1.2) as resp:
-            raw = json.loads(resp.read().decode("utf-8", "ignore"))
+            return json.loads(resp.read().decode("utf-8", "ignore"))
+
+    try:
+        raw = get_json("/session")
     except Exception as exc:
         return "offline", 0, 0, 0, f"bettercap unavailable: {exc}", "", ""
 
@@ -282,6 +286,15 @@ def bettercap_state(url, username, password):
     latest_ap = ""
     latest_client = ""
     wifi = raw.get("wifi") if isinstance(raw, dict) else None
+    if not isinstance(wifi, dict):
+        wifi = {}
+    try:
+        live_wifi = get_json("/session/wifi")
+        if isinstance(live_wifi, dict):
+            wifi = {**wifi, **live_wifi}
+    except Exception:
+        pass
+
     if isinstance(wifi, dict):
         aps = wifi.get("aps") or wifi.get("access_points") or []
         clients = wifi.get("clients") or []

@@ -114,6 +114,10 @@ if [[ -z "\$IW_BIN" ]]; then
     echo "[bettercap-launch] ERROR: iw not found in PATH or /usr/sbin/iw"
     exit 1
 fi
+RFKILL_BIN="\$(command -v rfkill 2>/dev/null || true)"
+if [[ -z "\$RFKILL_BIN" && -x /usr/sbin/rfkill ]]; then
+    RFKILL_BIN=/usr/sbin/rfkill
+fi
 
 detect_source_iface() {
     if [[ -n "\$SOURCE_IFACE" ]]; then
@@ -141,6 +145,8 @@ detect_source_iface() {
 }
 
 setup_monitor_interface() {
+    [[ -n "\$RFKILL_BIN" ]] && "\$RFKILL_BIN" unblock wifi 2>/dev/null || true
+
     if ip link show "\$IFACE" >/dev/null 2>&1; then
         "\$IW_BIN" dev "\$IFACE" set type monitor 2>/dev/null || true
         ip link set "\$IFACE" up 2>/dev/null || true
@@ -155,7 +161,6 @@ setup_monitor_interface() {
         return 1
     fi
 
-    command -v rfkill >/dev/null 2>&1 && rfkill unblock wifi 2>/dev/null || true
     ip link set "\$source_iface" up 2>/dev/null || true
     sleep 1
     "\$IW_BIN" dev "\$source_iface" set power_save off 2>/dev/null || true
