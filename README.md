@@ -5,7 +5,8 @@
 > cannot be used for Pwnagotchi packet capture. This app requires an external
 > USB Wi-Fi adapter that supports monitor mode.
 >
-> Tested hardware: **Qualcomm Atheros AR9271 802.11n USB Wi-Fi adapter**.
+> Tested hardware: **TP-Link TL-WN722N v1.0** USB Wi-Fi adapter
+> (Atheros AR9271 chipset).
 
 Pwnagotchi APPLaunch client for CardputerZero, implemented in the same style as `cardputer-xiaozhi`:
 - C++ app loop for input and page state
@@ -37,7 +38,7 @@ monitor mode. A separate monitor-mode capable USB Wi-Fi adapter is required.
 
 The tested setup uses:
 
-- USB Wi-Fi: Qualcomm Atheros AR9271 802.11n
+- USB Wi-Fi: TP-Link TL-WN722N v1.0 (Atheros AR9271 chipset)
 - Source interface: `wlan1`
 - Monitor interface created by the installer/wrapper: `wlan1mon`
 
