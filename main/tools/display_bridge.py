@@ -164,12 +164,22 @@ def render_frame(state):
 
     uptime_str = uptime_label(state['uptime_s'])
     bat_label = "BAT --" if state['battery_pct'] <= 0 else f"BAT {state['battery_pct']}"
-    draw.text((10, 10), channel_label(state['channel']), font=TOP_FONT, fill=white)
-    draw.text((56, 10), aps_label(state['ap_count'], state.get('client_count', 0)), font=TOP_FONT, fill=white)
-    draw.text((136, 10), bat_label, font=TOP_FONT, fill=white)
-    up_bbox = TOP_FONT.getbbox(f"UP {uptime_str}")
+    channel_text = channel_label(state['channel'])
+    aps_text = aps_label(state['ap_count'], state.get('client_count', 0))
+    up_text = f"UP {uptime_str}"
+    up_bbox = TOP_FONT.getbbox(up_text)
     up_width = up_bbox[2] - up_bbox[0]
-    draw.text((WIDTH - 12 - up_width, 10), f"UP {uptime_str}", font=TOP_FONT, fill=white)
+    up_x = WIDTH - 12 - up_width
+    draw.text((10, 10), channel_text, font=TOP_FONT, fill=white)
+    draw.text((56, 10), aps_text, font=TOP_FONT, fill=white)
+    aps_bbox = TOP_FONT.getbbox(aps_text)
+    aps_width = aps_bbox[2] - aps_bbox[0]
+    bat_bbox = TOP_FONT.getbbox(bat_label)
+    bat_width = bat_bbox[2] - bat_bbox[0]
+    bat_x = min(max(56 + aps_width + 8, 136), up_x - bat_width - 8)
+    if bat_x > 56 + aps_width:
+        draw.text((bat_x, 10), bat_label, font=TOP_FONT, fill=white)
+    draw.text((up_x, 10), up_text, font=TOP_FONT, fill=white)
 
     draw.line((10, 29, WIDTH - 10, 29), fill=white, width=1)
     draw.text((10, 33), "pwnagotchi>", font=TOP_FONT, fill=white)

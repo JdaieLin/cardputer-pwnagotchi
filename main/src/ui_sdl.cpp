@@ -156,8 +156,8 @@ void UiSdl::render(const UiModel& model) {
     SDL_SetRenderDrawColor(renderer_, 255, 255, 255, 255);
 
     drawSdlText(renderer_, {28, 28, 70, 18}, channelLabel(model.state.channel), {{255, 255, 255, 255}, 13.0f, true, false, false});
-    drawSdlText(renderer_, {82, 28, 90, 18}, apsLabel(model.state.ap_count, model.state.client_count), {{255, 255, 255, 255}, 13.0f, true, false, false});
-    drawSdlText(renderer_, {184, 28, 84, 18}, (model.state.battery_pct > 0 ? "BAT " + std::to_string(model.state.battery_pct) : "BAT --"), {{255, 255, 255, 255}, 13.0f, true, false, false});
+    drawSdlText(renderer_, {82, 28, 100, 18}, apsLabel(model.state.ap_count, model.state.client_count), {{255, 255, 255, 255}, 13.0f, true, false, false});
+    drawSdlText(renderer_, {190, 28, 76, 18}, (model.state.battery_pct > 0 ? "BAT " + std::to_string(model.state.battery_pct) : "BAT --"), {{255, 255, 255, 255}, 13.0f, true, false, false});
     drawSdlText(renderer_, {344, 28, 100, 18}, "UP " + uptimeLabel(model.state.uptime_s), {{255, 255, 255, 255}, 13.0f, true, false, false});
 
     SDL_SetRenderDrawColor(renderer_, 255, 255, 255, 255);
