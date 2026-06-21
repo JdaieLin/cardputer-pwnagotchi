@@ -54,6 +54,10 @@ DisplayBridge::~DisplayBridge() {
     disconnect();
 }
 
+void DisplayBridge::shutdown() {
+    disconnect();
+}
+
 bool DisplayBridge::init() {
     signal(SIGPIPE, SIG_IGN);
 
@@ -129,6 +133,9 @@ bool DisplayBridge::init() {
 }
 
 void DisplayBridge::disconnect() {
+    if (child_stdin_fd_ >= 0 && connected_) {
+        sendJsonLine("{\"cmd\":\"quit\"}");
+    }
     if (child_stdin_fd_ >= 0) {
         close(child_stdin_fd_);
         child_stdin_fd_ = -1;
@@ -138,9 +145,39 @@ void DisplayBridge::disconnect() {
         child_stdout_fd_ = -1;
     }
     if (child_pid_ > 0) {
-        kill(child_pid_, SIGTERM);
         int status = 0;
-        waitpid(child_pid_, &status, WNOHANG);
+        bool exited = false;
+        for (int i = 0; i < 10; ++i) {
+            const pid_t result = waitpid(child_pid_, &status, WNOHANG);
+            if (result == child_pid_) {
+                exited = true;
+                break;
+            }
+            if (result < 0 && errno == ECHILD) {
+                exited = true;
+                break;
+            }
+            usleep(20 * 1000);
+        }
+        if (!exited) {
+            kill(child_pid_, SIGTERM);
+            for (int i = 0; i < 10; ++i) {
+                const pid_t result = waitpid(child_pid_, &status, WNOHANG);
+                if (result == child_pid_) {
+                    exited = true;
+                    break;
+                }
+                if (result < 0 && errno == ECHILD) {
+                    exited = true;
+                    break;
+                }
+                usleep(20 * 1000);
+            }
+        }
+        if (!exited) {
+            kill(child_pid_, SIGKILL);
+            waitpid(child_pid_, &status, 0);
+        }
         child_pid_ = -1;
     }
     connected_ = false;

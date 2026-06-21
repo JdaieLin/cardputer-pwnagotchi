@@ -12,6 +12,7 @@ public:
     ~DisplayBridge() override;
 
     bool init() override;
+    void shutdown() override;
     void render(const UiModel& model) override;
     void disconnect();
 

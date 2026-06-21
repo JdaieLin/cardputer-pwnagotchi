@@ -41,8 +41,9 @@ void Application::stop() {
     if (!running_) {
         return;
     }
-    client_->disconnect();
     running_ = false;
+    ui_->shutdown();
+    client_->disconnect();
 }
 
 void Application::tick() {
@@ -51,6 +52,9 @@ void Application::tick() {
     }
 
     hal_->poll();
+    if (!running_) {
+        return;
+    }
     if (hal_->shouldQuit()) {
         stop();
         return;
@@ -151,6 +155,9 @@ void Application::reconnectIfDue() {
 }
 
 void Application::renderUi(bool force) {
+    if (!running_) {
+        return;
+    }
     const auto now = std::chrono::steady_clock::now();
     if (!force && now - last_ui_refresh_ < std::chrono::milliseconds(120)) {
         return;

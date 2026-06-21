@@ -211,6 +211,8 @@ Section: APPLaunch
 Priority: optional
 Homepage: $HOMEPAGE_URL
 Depends: sudo, python3, python3-pip, python3-pil, curl, git, fonts-noto-cjk, fonts-noto-color-emoji, binutils, iw, wireless-tools, rfkill, bettercap, bettercap-caplets, iptables
+Replaces: pwnagotchi-applaunch
+Breaks: pwnagotchi-applaunch
 Description: $DESCRIPTION for M5Cardputer Zero
  Requires a monitor-mode capable external USB Wi-Fi adapter; the CM0 onboard
  Wi-Fi does not support monitor mode for Pwnagotchi capture.

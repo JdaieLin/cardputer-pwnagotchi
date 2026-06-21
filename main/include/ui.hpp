@@ -8,6 +8,7 @@ class Ui {
 public:
     virtual ~Ui() = default;
     virtual bool init() = 0;
+    virtual void shutdown() {}
     virtual void render(const UiModel& model) = 0;
 };
 
