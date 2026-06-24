@@ -22,6 +22,8 @@ install_systemd_safeguards() {
 [Unit]
 StartLimitIntervalSec=120
 StartLimitBurst=3
+Wants=bettercap.service
+After=bettercap.service
 
 [Service]
 ExecStart=
@@ -144,13 +146,30 @@ detect_source_iface() {
     return 1
 }
 
+wait_for_monitor_interface() {
+    for attempt in \$(seq 1 12); do
+        [[ -n "\$RFKILL_BIN" ]] && "\$RFKILL_BIN" unblock wifi 2>/dev/null || true
+        ip link set "\$IFACE" up 2>/dev/null || true
+        "\$IW_BIN" dev "\$IFACE" set type monitor 2>/dev/null || true
+        "\$IW_BIN" dev "\$IFACE" set power_save off 2>/dev/null || true
+        if ip -br link show "\$IFACE" 2>/dev/null | grep -q 'UP'; then
+            "\$IW_BIN" dev "\$IFACE" info 2>/dev/null | grep -q 'type monitor' && return 0
+        fi
+        echo "[bettercap-launch] Waiting for monitor interface \$IFACE to come up (\$attempt/12)..."
+        sleep 1
+    done
+    echo "[bettercap-launch] ERROR: monitor interface \$IFACE is not up"
+    return 1
+}
+
 setup_monitor_interface() {
     [[ -n "\$RFKILL_BIN" ]] && "\$RFKILL_BIN" unblock wifi 2>/dev/null || true
 
     if ip link show "\$IFACE" >/dev/null 2>&1; then
         "\$IW_BIN" dev "\$IFACE" set type monitor 2>/dev/null || true
         ip link set "\$IFACE" up 2>/dev/null || true
-        return 0
+        wait_for_monitor_interface
+        return \$?
     fi
 
     echo "[bettercap-launch] Setting up monitor interface \$IFACE..."
@@ -176,8 +195,10 @@ setup_monitor_interface() {
             fi
             ip link set "\$IFACE" up 2>/dev/null || true
             "\$IW_BIN" dev "\$IFACE" set power_save off 2>/dev/null || true
-            echo "[bettercap-launch] Monitor interface \$IFACE is up."
-            return 0
+            if wait_for_monitor_interface; then
+                echo "[bettercap-launch] Monitor interface \$IFACE is up."
+                return 0
+            fi
         fi
         echo "[bettercap-launch] Attempt \$attempt/\$MAX_RETRIES to create monitor interface failed."
         sleep \$RETRY_DELAY
@@ -264,9 +285,9 @@ fi
 MAX_WAIT=30
 waited=0
 IFACE="${PWNAGOTCHI_IFACE:-wlan0mon}"
-while ! ip link show "$IFACE" >/dev/null 2>&1; do
+while ! ip -br link show "$IFACE" 2>/dev/null | grep -q 'UP'; do
     if [[ $waited -ge $MAX_WAIT ]]; then
-        echo "[pwnagotchi-launch] Warning: monitor interface $IFACE not ready after ${MAX_WAIT}s"
+        echo "[pwnagotchi-launch] Warning: monitor interface $IFACE not up after ${MAX_WAIT}s"
         break
     fi
     sleep 2
