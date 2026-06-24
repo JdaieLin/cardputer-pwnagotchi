@@ -226,7 +226,7 @@ configure_bettercap_caplets() {
         if grep -q '^wifi.recon on' "$caplet"; then
             sudo sed -i "0,/^wifi.recon on/s|^wifi.recon on|set wifi.handshakes.file $handshakes_file\\nwifi.recon on|" "$caplet"
         else
-            echo "set wifi.handshakes.file $handshakes_file" | sudo tee -a "$caplet" >/dev/null
+            printf '\nset wifi.handshakes.file %s\nwifi.recon on\n' "$handshakes_file" | sudo tee -a "$caplet" >/dev/null
         fi
     done
 }
