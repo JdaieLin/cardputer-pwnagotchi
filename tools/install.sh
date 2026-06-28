@@ -104,8 +104,8 @@ MODE_FILE="/etc/default/pwnagotchi-cardputer"
 if [[ -f "\$MODE_FILE" ]]; then
     source "\$MODE_FILE"
 fi
-IFACE="\${PWNAGOTCHI_IFACE:-wlan0mon}"
-SOURCE_IFACE="\${PWNAGOTCHI_SOURCE_IFACE:-}"
+IFACE="\${PWNAGOTCHI_IFACE:-auto}"
+SOURCE_IFACE="\${PWNAGOTCHI_SOURCE_IFACE:-auto}"
 MAX_RETRIES=3
 RETRY_DELAY=5
 IW_BIN="\$(command -v iw 2>/dev/null || true)"
@@ -121,29 +121,122 @@ if [[ -z "\$RFKILL_BIN" && -x /usr/sbin/rfkill ]]; then
     RFKILL_BIN=/usr/sbin/rfkill
 fi
 
+phy_supports_monitor() {
+    "\$IW_BIN" phy "\$1" info 2>/dev/null | awk '
+        /^[[:space:]]*Supported interface modes:/ { modes=1; next }
+        modes && /^[[:space:]]*\\* monitor\$/ { found=1 }
+        modes && /^[^[:space:]]/ { modes=0 }
+        END { exit found ? 0 : 1 }
+    '
+}
+
+iface_phy() {
+    "\$IW_BIN" dev "\$1" info 2>/dev/null | awk '/wiphy/{print "phy"\$2; exit}'
+}
+
+is_usb_iface() {
+    local dev_path
+    dev_path="\$(readlink -f "/sys/class/net/\$1/device" 2>/dev/null || true)"
+    [[ "\$dev_path" == *"/usb"* ]]
+}
+
+iface_is_monitor() {
+    "\$IW_BIN" dev "\$1" info 2>/dev/null | grep -q 'type monitor'
+}
+
 detect_source_iface() {
-    if [[ -n "\$SOURCE_IFACE" ]]; then
+    if [[ -n "\$SOURCE_IFACE" && "\$SOURCE_IFACE" != "auto" ]]; then
+        if ! "\$IW_BIN" dev "\$SOURCE_IFACE" info >/dev/null 2>&1; then
+            echo "[bettercap-launch] ERROR: configured source interface \$SOURCE_IFACE not found" >&2
+            return 1
+        fi
+        local configured_phy
+        configured_phy="\$(iface_phy "\$SOURCE_IFACE")"
+        if [[ -z "\$configured_phy" ]] || ! phy_supports_monitor "\$configured_phy"; then
+            echo "[bettercap-launch] ERROR: configured source interface \$SOURCE_IFACE does not support monitor mode" >&2
+            return 1
+        fi
         echo "\$SOURCE_IFACE"
         return 0
     fi
-    if "\$IW_BIN" dev "\$IFACE" info >/dev/null 2>&1; then
-        echo "\$IFACE"
-        return 0
-    fi
-    if [[ "\$IFACE" == *mon ]]; then
+
+    if [[ "\$IFACE" != "auto" && "\$IFACE" == *mon ]]; then
         local candidate="\${IFACE%mon}"
         if "\$IW_BIN" dev "\$candidate" info >/dev/null 2>&1; then
-            echo "\$candidate"
+            local candidate_phy
+            candidate_phy="\$(iface_phy "\$candidate")"
+            if [[ -n "\$candidate_phy" ]] && phy_supports_monitor "\$candidate_phy"; then
+                echo "\$candidate"
+                return 0
+            fi
+        fi
+    fi
+
+    local best_non_usb=""
+    for phy_path in /sys/class/ieee80211/phy*; do
+        [[ -e "\$phy_path" ]] || continue
+        local phy
+        phy="\${phy_path##*/}"
+        phy_supports_monitor "\$phy" || continue
+        for net_path in "\$phy_path"/device/net/*; do
+            [[ -e "\$net_path" ]] || continue
+            local candidate
+            candidate="\${net_path##*/}"
+            [[ "\$candidate" == *mon ]] && continue
+            if is_usb_iface "\$candidate"; then
+                echo "\$candidate"
+                return 0
+            fi
+            [[ -z "\$best_non_usb" ]] && best_non_usb="\$candidate"
+        done
+    done
+    if [[ -n "\$best_non_usb" ]]; then
+        echo "\$best_non_usb"
+        return 0
+    fi
+
+    for candidate in wlan1 wlan0; do
+        if "\$IW_BIN" dev "\$candidate" info >/dev/null 2>&1; then
+            local candidate_phy
+            candidate_phy="\$(iface_phy "\$candidate")"
+            if [[ -n "\$candidate_phy" ]] && phy_supports_monitor "\$candidate_phy"; then
+                echo "\$candidate"
+                return 0
+            fi
+        fi
+    done
+
+    if [[ "\$IFACE" != "auto" ]] && "\$IW_BIN" dev "\$IFACE" info >/dev/null 2>&1 && iface_is_monitor "\$IFACE"; then
+        local iface_phy_name
+        iface_phy_name="\$(iface_phy "\$IFACE")"
+        if [[ -n "\$iface_phy_name" ]] && phy_supports_monitor "\$iface_phy_name"; then
+            echo "\$IFACE"
             return 0
         fi
     fi
-    for candidate in wlan1 wlan0; do
-        if "\$IW_BIN" dev "\$candidate" info >/dev/null 2>&1; then
-            echo "\$candidate"
-            return 0
-        fi
-    done
+
     return 1
+}
+
+resolve_monitor_iface() {
+    local source_iface="\$1"
+    if [[ -n "\$IFACE" && "\$IFACE" != "auto" ]]; then
+        echo "\$IFACE"
+    else
+        echo "\${source_iface}mon"
+    fi
+}
+
+remove_stale_monitor_iface() {
+    if ip link show "\$IFACE" >/dev/null 2>&1; then
+        local iface_phy_name source_phy_name
+        iface_phy_name="\$(iface_phy "\$IFACE")"
+        source_phy_name="\$(iface_phy "\$1")"
+        if [[ -n "\$iface_phy_name" && -n "\$source_phy_name" && "\$iface_phy_name" != "\$source_phy_name" ]]; then
+            ip link set "\$IFACE" down 2>/dev/null || true
+            "\$IW_BIN" dev "\$IFACE" del 2>/dev/null || true
+        fi
+    fi
 }
 
 wait_for_monitor_interface() {
@@ -165,6 +258,19 @@ wait_for_monitor_interface() {
 setup_monitor_interface() {
     [[ -n "\$RFKILL_BIN" ]] && "\$RFKILL_BIN" unblock wifi 2>/dev/null || true
 
+    local source_iface
+    if ! source_iface="\$(detect_source_iface)"; then
+        echo "[bettercap-launch] ERROR: no monitor-mode capable wireless source interface found"
+        return 1
+    fi
+    IFACE="\$(resolve_monitor_iface "\$source_iface")"
+    DETECTED_SOURCE_IFACE="\$source_iface"
+    echo "[bettercap-launch] Using source interface \$source_iface and monitor interface \$IFACE"
+
+    if [[ "\$source_iface" != "\$IFACE" ]]; then
+        remove_stale_monitor_iface "\$source_iface"
+    fi
+
     if ip link show "\$IFACE" >/dev/null 2>&1; then
         "\$IW_BIN" dev "\$IFACE" set type monitor 2>/dev/null || true
         ip link set "\$IFACE" up 2>/dev/null || true
@@ -174,18 +280,16 @@ setup_monitor_interface() {
 
     echo "[bettercap-launch] Setting up monitor interface \$IFACE..."
 
-    local source_iface
-    if ! source_iface="\$(detect_source_iface)"; then
-        echo "[bettercap-launch] ERROR: no wireless source interface found"
-        return 1
-    fi
-
     ip link set "\$source_iface" up 2>/dev/null || true
     sleep 1
     "\$IW_BIN" dev "\$source_iface" set power_save off 2>/dev/null || true
 
     local phy
-    phy="\$("\$IW_BIN" dev "\$source_iface" info 2>/dev/null | awk '/wiphy/{print "phy"\$2}' || echo phy0)"
+    phy="\$(iface_phy "\$source_iface")"
+    if [[ -z "\$phy" ]] || ! phy_supports_monitor "\$phy"; then
+        echo "[bettercap-launch] ERROR: source interface \$source_iface does not support monitor mode"
+        return 1
+    fi
 
     for attempt in \$(seq 1 \$MAX_RETRIES); do
         if "\$IW_BIN" phy "\$phy" interface add "\$IFACE" type monitor 2>/dev/null; then
@@ -208,9 +312,25 @@ setup_monitor_interface() {
     return 1
 }
 
+update_runtime_caplet_iface() {
+    local caplet_file
+    for caplet_file in "\$CAPLET_DIR"/pwnagotchi-auto.cap "\$CAPLET_DIR"/pwnagotchi-manual.cap; do
+        [[ -f "\$caplet_file" ]] || continue
+        if grep -q '^set wifi.interface ' "\$caplet_file"; then
+            sed -i "s|^set wifi.interface .*|set wifi.interface \$IFACE|" "\$caplet_file"
+        else
+            printf 'set wifi.interface %s\n' "\$IFACE" >> "\$caplet_file"
+        fi
+    done
+}
+
 if ! setup_monitor_interface; then
     exit 1
 fi
+
+export PWNAGOTCHI_SOURCE_IFACE="\$DETECTED_SOURCE_IFACE"
+export PWNAGOTCHI_IFACE="\$IFACE"
+update_runtime_caplet_iface
 
 CAPLET="pwnagotchi-auto"
 if [[ "\${PWNAGOTCHI_MODE:-}" == "manual" ]]; then
@@ -255,11 +375,17 @@ configure_bettercap_caplets() {
 ensure_cardputer_defaults() {
     local mode_file="/etc/default/pwnagotchi-cardputer"
     sudo touch "$mode_file"
+    if grep -q '^PWNAGOTCHI_SOURCE_IFACE=wlan1$' "$mode_file"; then
+        sudo sed -i 's/^PWNAGOTCHI_SOURCE_IFACE=wlan1$/PWNAGOTCHI_SOURCE_IFACE=auto/' "$mode_file"
+    fi
+    if grep -q '^PWNAGOTCHI_IFACE=wlan1mon$' "$mode_file"; then
+        sudo sed -i 's/^PWNAGOTCHI_IFACE=wlan1mon$/PWNAGOTCHI_IFACE=auto/' "$mode_file"
+    fi
     if ! grep -q '^PWNAGOTCHI_SOURCE_IFACE=' "$mode_file"; then
-        echo 'PWNAGOTCHI_SOURCE_IFACE=wlan1' | sudo tee -a "$mode_file" >/dev/null
+        echo 'PWNAGOTCHI_SOURCE_IFACE=auto' | sudo tee -a "$mode_file" >/dev/null
     fi
     if ! grep -q '^PWNAGOTCHI_IFACE=' "$mode_file"; then
-        echo 'PWNAGOTCHI_IFACE=wlan1mon' | sudo tee -a "$mode_file" >/dev/null
+        echo 'PWNAGOTCHI_IFACE=auto' | sudo tee -a "$mode_file" >/dev/null
     fi
     if ! grep -q '^PWNAGOTCHI_MODE=' "$mode_file"; then
         echo 'PWNAGOTCHI_MODE=auto' | sudo tee -a "$mode_file" >/dev/null
@@ -284,10 +410,18 @@ fi
 
 MAX_WAIT=30
 waited=0
-IFACE="${PWNAGOTCHI_IFACE:-wlan0mon}"
-while ! ip -br link show "$IFACE" 2>/dev/null | grep -q 'UP'; do
+IFACE="${PWNAGOTCHI_IFACE:-auto}"
+monitor_ready() {
+    if [[ -n "$IFACE" && "$IFACE" != "auto" ]]; then
+        ip -br link show "$IFACE" 2>/dev/null | grep -q 'UP'
+    else
+        ip -br link 2>/dev/null | awk '$1 ~ /mon$/ && $0 ~ /UP/ { found=1 } END { exit found ? 0 : 1 }'
+    fi
+}
+
+while ! monitor_ready; do
     if [[ $waited -ge $MAX_WAIT ]]; then
-        echo "[pwnagotchi-launch] Warning: monitor interface $IFACE not up after ${MAX_WAIT}s"
+        echo "[pwnagotchi-launch] Warning: monitor interface not up after ${MAX_WAIT}s"
         break
     fi
     sleep 2

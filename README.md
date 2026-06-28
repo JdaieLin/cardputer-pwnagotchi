@@ -39,21 +39,23 @@ monitor mode. A separate monitor-mode capable USB Wi-Fi adapter is required.
 The tested setup uses:
 
 - USB Wi-Fi: TP-Link TL-WN722N v1.0 (Atheros AR9271 chipset)
-- Source interface: `wlan1`
-- Monitor interface created by the installer/wrapper: `wlan1mon`
+- Default source interface selection: `auto`
+- Monitor interface created by the installer/wrapper: `${source}mon`, for example `wlan1mon`
 
 The runtime configuration lives in `/etc/default/pwnagotchi-cardputer`:
 
 ```bash
-PWNAGOTCHI_SOURCE_IFACE=wlan1
-PWNAGOTCHI_IFACE=wlan1mon
+PWNAGOTCHI_SOURCE_IFACE=auto
+PWNAGOTCHI_IFACE=auto
 PWNAGOTCHI_MODE=auto
 PWNAGOTCHI_HANDSHAKES_FILE=/home/pi/handshakes/bettercap-wifi-handshakes.pcap
 ```
 
-If your USB Wi-Fi adapter appears as a different interface, update
-`PWNAGOTCHI_SOURCE_IFACE` and restart `bettercap.service` and
-`pwnagotchi.service`.
+At startup the wrapper enumerates wireless PHYs with `iw`, selects a
+monitor-mode capable interface, prefers USB adapters over the CM0 onboard
+Wi-Fi, and creates a monitor interface for bettercap. If you need to force a
+specific adapter, set `PWNAGOTCHI_SOURCE_IFACE` and optionally
+`PWNAGOTCHI_IFACE`, then restart `bettercap.service` and `pwnagotchi.service`.
 
 ## Build
 
