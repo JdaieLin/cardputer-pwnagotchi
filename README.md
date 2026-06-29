@@ -8,6 +8,8 @@
 > Tested hardware: **TP-Link TL-WN722N v1.0** USB Wi-Fi adapter
 > (Atheros AR9271 chipset).
 
+![CardputerZero running Pwnagotchi with TP-Link TL-WN722N v1.0 USB Wi-Fi adapter](docs/images/pwnagotchi-hardware.jpg)
+
 Pwnagotchi APPLaunch client for CardputerZero, implemented in the same style as `cardputer-xiaozhi`:
 - C++ app loop for input and page state
 - Python bridge for local `pwnagotchi` / `bettercap` aggregation
