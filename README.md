@@ -144,3 +144,7 @@ Supported variables:
 
 - `Manual` / `Auto` switching is implemented through `/etc/default/pwnagotchi-cardputer` plus a systemd override wrapper installed by `tools/install.sh`.
 - On an existing device, run the packaged installer first so the service override exists before using mode switching.
+
+## License
+
+This project is released under the [MIT License](LICENSE).
