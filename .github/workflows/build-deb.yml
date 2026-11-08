@@ -23,17 +23,6 @@ jobs:
             python3 python3-pip python3-pil \
             fonts-noto-cjk fonts-noto-color-emoji
 
-      - name: Bundle pwnagotchi source
-        run: |
-          set -euo pipefail
-          mkdir -p build
-          curl -fsSL \
-            https://github.com/jayofelony/pwnagotchi/archive/refs/heads/master.tar.gz \
-            -o build/pwnagotchi-master.tar.gz
-
-      - name: Fetch fonts for distribution
-        run: chmod +x tools/fetch_fonts.sh && ./tools/fetch_fonts.sh tools/fonts
-
       - name: Build .deb
         run: |
           chmod +x build.sh tools/package_applaunch.sh
@@ -57,6 +46,24 @@ jobs:
           dpkg-deb -I "$deb"
           echo "=== contents ==="
           dpkg-deb -c "$deb" | head -80
+
+      - name: Verify read-only package policy
+        run: |
+          set -euo pipefail
+          deb="$(find build -maxdepth 1 -name 'cardputerzero-pwnagotchi_*_arm64.deb' -print -quit)"
+          test -n "$deb"
+          rm -rf /tmp/pwnagotchi-control /tmp/pwnagotchi-data
+          dpkg-deb -e "$deb" /tmp/pwnagotchi-control
+          dpkg-deb -x "$deb" /tmp/pwnagotchi-data
+          for script in preinst postinst prerm postrm; do
+            test ! -e "/tmp/pwnagotchi-control/$script"
+          done
+          test ! -d /tmp/pwnagotchi-data/etc/systemd
+          test ! -d /tmp/pwnagotchi-data/usr/lib/systemd
+          test ! -d /tmp/pwnagotchi-data/lib/systemd
+          test ! -d /tmp/pwnagotchi-data/usr/local
+          test ! -e /tmp/pwnagotchi-data/usr/share/APPLaunch/share/pwnagotchi/pwnagotchi-master.tar.gz
+          test ! -d /tmp/pwnagotchi-data/usr/share/APPLaunch/share/pwnagotchi/fonts
 
       - uses: actions/upload-artifact@v4
         with:

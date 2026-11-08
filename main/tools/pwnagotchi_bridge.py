@@ -526,48 +526,6 @@ def personality_state(service, cap_state, ap_count, client_count, handshake_coun
     return mood_variant("awake"), voice_choice("normal")
 
 
-def write_mode_override(mode):
-    env = {}
-    path = pathlib.Path(MODE_ENV_FILE)
-    if path.exists():
-        for line in path.read_text().splitlines():
-            if not line or line.lstrip().startswith("#") or "=" not in line:
-                continue
-            key, value = line.split("=", 1)
-            env[key.strip()] = value.strip().strip('"')
-    env.setdefault("PWNAGOTCHI_SOURCE_IFACE", "wlan1")
-    env.setdefault("PWNAGOTCHI_IFACE", "wlan1mon")
-    env.setdefault("PWNAGOTCHI_HANDSHAKES_FILE", "/home/pi/handshakes/bettercap-wifi-handshakes.pcap")
-    env["PWNAGOTCHI_MODE"] = mode
-    ordered = [
-        "PWNAGOTCHI_SOURCE_IFACE",
-        "PWNAGOTCHI_IFACE",
-        "PWNAGOTCHI_MODE",
-        "PWNAGOTCHI_HANDSHAKES_FILE",
-    ]
-    lines = [f'{key}="{env[key]}"' for key in ordered if key in env]
-    lines.extend(f'{key}="{value}"' for key, value in sorted(env.items()) if key not in ordered)
-    path.write_text("\n".join(lines) + "\n")
-
-
-def action_service(service_name, action):
-    result = sh(["systemctl", action, service_name])
-    ok = result.returncode == 0
-    msg = (result.stdout + result.stderr).strip() or f"{action} {service_name}"
-    return ok, msg
-
-
-def action_set_mode(service_name, mode):
-    try:
-        write_mode_override(mode)
-    except Exception as exc:
-        return False, f"mode write failed: {exc}"
-    restart = sh(["systemctl", "restart", service_name])
-    ok = restart.returncode == 0
-    msg = (restart.stdout + restart.stderr).strip() or f"mode set to {mode}"
-    return ok, msg
-
-
 def aggregate_state(args):
     cfg = load_config(args.config)
     name = nested_get(cfg, ["main", "name"], "Pwnagotchi") or "Pwnagotchi"
@@ -627,16 +585,8 @@ def aggregate_state(args):
 
 
 def handle_action(args, name):
-    if name == "start_service":
-        return action_service(args.service_name, "start")
-    if name == "stop_service":
-        return action_service(args.service_name, "stop")
-    if name == "restart_service":
-        return action_service(args.service_name, "restart")
-    if name == "set_manual":
-        return action_set_mode(args.service_name, "manual")
-    if name == "set_auto":
-        return action_set_mode(args.service_name, "auto")
+    if name in ("start_service", "stop_service", "restart_service", "set_manual", "set_auto"):
+        return False, "Read-only package: manage Pwnagotchi with the host administrator"
     return False, f"unknown action: {name}"
 
 

@@ -53,10 +53,8 @@ std::string bridgeScriptPath() {
 }
 
 std::string python3Path() {
-    for (const auto& candidate : {"/usr/bin/python3", "/usr/local/bin/python3", "/opt/homebrew/bin/python3"}) {
-        if (access(candidate, X_OK) == 0) {
-            return candidate;
-        }
+    if (access("/usr/bin/python3", X_OK) == 0) {
+        return "/usr/bin/python3";
     }
     return "python3";
 }

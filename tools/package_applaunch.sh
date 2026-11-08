@@ -8,7 +8,6 @@ ICON_SRC="${PWNAGOTCHI_ICON_SRC:-$ROOT_DIR/tools/assets/pwnagotchi.png}"
 MAINTAINER_NAME="${PWNAGOTCHI_MAINTAINER_NAME:-JdaieLin}"
 MAINTAINER_EMAIL="${PWNAGOTCHI_MAINTAINER_EMAIL:-hongruilin@alum.calarts.edu}"
 HOMEPAGE_URL="${PWNAGOTCHI_HOMEPAGE_URL:-https://github.com/JdaieLin/cardputer-pwnagotchi}"
-PWN_ARCHIVE_LOCAL="${PWNAGOTCHI_ARCHIVE_LOCAL:-$BUILD_DIR/pwnagotchi-master.tar.gz}"
 
 GTAR_BIN="${GTAR:-}"
 if [[ -z "$GTAR_BIN" ]]; then
@@ -92,47 +91,7 @@ mkdir -p \
 install -m 0755 "$BIN" "$PKG_ROOT/usr/share/APPLaunch/bin/$BIN_NAME"
 install -m 0644 "$ROOT_DIR/main/tools/pwnagotchi_bridge.py" "$PKG_ROOT/usr/share/APPLaunch/share/pwnagotchi/pwnagotchi_bridge.py"
 install -m 0644 "$ROOT_DIR/main/tools/display_bridge.py" "$PKG_ROOT/usr/share/APPLaunch/share/pwnagotchi/display_bridge.py"
-install -m 0755 "$ROOT_DIR/tools/install.sh" "$PKG_ROOT/usr/share/APPLaunch/share/pwnagotchi/install.sh"
-install -m 0755 "$ROOT_DIR/tools/bootstrap_pwnagotchi.sh" "$PKG_ROOT/usr/share/APPLaunch/share/pwnagotchi/bootstrap_pwnagotchi.sh"
 install -m 0644 "$ICON_SRC" "$PKG_ROOT/usr/share/APPLaunch/share/images/pwnagotchi.png"
-
-if [[ -f "$PWN_ARCHIVE_LOCAL" ]]; then
-    install -m 0644 "$PWN_ARCHIVE_LOCAL" "$PKG_ROOT/usr/share/APPLaunch/share/pwnagotchi/pwnagotchi-master.tar.gz"
-    echo "[package] bundled pwnagotchi archive: $PWN_ARCHIVE_LOCAL"
-else
-    echo "[package] warning: no pwnagotchi archive at $PWN_ARCHIVE_LOCAL; installer will fall back to git clone"
-fi
-
-# Bundle display fonts so the app does not need a separate font setup step.
-FONT_DST="$PKG_ROOT/usr/share/APPLaunch/share/pwnagotchi/fonts"
-mkdir -p "$FONT_DST"
-copy_first_font() {
-    local dst_name="$1"
-    shift
-    for src in "$@"; do
-        if [[ -f "$src" ]]; then
-            install -m 0644 "$src" "$FONT_DST/$dst_name"
-            echo "[package] bundled font: $dst_name <= $src"
-            return 0
-        fi
-    done
-    echo "[package] missing optional font: $dst_name"
-    return 0
-}
-
-copy_first_font "NotoSansSC-Bold.ttf" \
-    "$ROOT_DIR/tools/fonts/NotoSansSC-Bold.ttf" \
-    "$ROOT_DIR/tools/fonts/NotoSansSC-Regular.ttf" \
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc" \
-    "/usr/share/fonts/opentype/noto/NotoSansCJKSC-Regular.otf" \
-    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc" \
-    "/usr/share/fonts/truetype/noto/NotoSansSC-Regular.ttf" \
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-
-copy_first_font "NotoColorEmoji.ttf" \
-    "$ROOT_DIR/tools/fonts/NotoColorEmoji.ttf" \
-    "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf" \
-    "/usr/share/fonts/opentype/noto/NotoColorEmoji.ttf"
 
 cat > "$PKG_ROOT/usr/share/APPLaunch/bin/pwnagotchi_launcher" <<'EOF'
 #!/usr/bin/env bash
@@ -202,6 +161,8 @@ Sysplause=false
 Type=Application
 EOF
 
+INSTALLED_SIZE_KIB="$(du -sk "$PKG_ROOT/usr" | awk '{print $1}')"
+
 cat > "$PKG_ROOT/DEBIAN/control" <<EOF
 Package: $PACKAGE_NAME
 Version: $VERSION-$REVISION
@@ -210,29 +171,16 @@ Maintainer: $MAINTAINER_NAME <$MAINTAINER_EMAIL>
 Section: APPLaunch
 Priority: optional
 Homepage: $HOMEPAGE_URL
-Depends: sudo, python3, python3-pip, python3-pil, curl, git, fonts-noto-cjk, fonts-noto-color-emoji, binutils, iw, wireless-tools, rfkill, bettercap, bettercap-caplets, iptables
+Installed-Size: $INSTALLED_SIZE_KIB
+Depends: python3, python3-pil, fonts-noto-cjk, fonts-noto-color-emoji, iw, bettercap
 Replaces: pwnagotchi-applaunch
 Breaks: pwnagotchi-applaunch
 Description: $DESCRIPTION for M5Cardputer Zero
  Requires a monitor-mode capable external USB Wi-Fi adapter; the CM0 onboard
- Wi-Fi does not support monitor mode for Pwnagotchi capture.
+ Wi-Fi does not support monitor mode for Pwnagotchi capture. This package is a
+ companion UI for an existing, administrator-managed Pwnagotchi service and
+ never modifies system services or Python packages during installation.
 EOF
-
-cat > "$PKG_ROOT/DEBIAN/postinst" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-
-INSTALLER="/usr/share/APPLaunch/share/pwnagotchi/install.sh"
-ARCHIVE="/usr/share/APPLaunch/share/pwnagotchi/pwnagotchi-master.tar.gz"
-if [[ -x "$INSTALLER" ]]; then
-    if [[ -f "$ARCHIVE" ]]; then
-        PWNAGOTCHI_INSTALL_SKIP_APT=1 PWNAGOTCHI_ARCHIVE_PATH="$ARCHIVE" "$INSTALLER"
-    else
-        PWNAGOTCHI_INSTALL_SKIP_APT=1 "$INSTALLER"
-    fi
-fi
-EOF
-chmod 0755 "$PKG_ROOT/DEBIAN/postinst"
 
 make_ustar_gz "$PKG_ROOT/DEBIAN" "$BUILD_DIR/control.tar.gz" .
 make_ustar_gz "$PKG_ROOT" "$BUILD_DIR/data.tar.gz" --exclude ./DEBIAN .

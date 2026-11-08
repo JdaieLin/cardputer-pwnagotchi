@@ -1,10 +1,10 @@
 {
   "package_name": "cardputerzero-pwnagotchi",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "revision": "m5stack1",
   "app_name": "Pwnagotchi",
   "bin_name": "pwnagotchi_app",
-  "description": "Pwnagotchi monitor dashboard and controls for CardputerZero",
+  "description": "Read-only Pwnagotchi monitor dashboard",
   "runtime": "legacy-deb-only",
   "caps": [
     "keyboard",
@@ -14,11 +14,12 @@
   ],
   "store": {
     "uuid": "74b07cee-42ed-41c4-bce9-e11e3c3016f1",
-    "summary": "Pwnagotchi status, control, and handshake dashboard for CardputerZero with an external monitor-mode USB Wi-Fi adapter.",
+    "title": "Pwnagotchi",
+    "summary": "Pwnagotchi dashboard for an existing service and external USB Wi-Fi.",
+    "description": "A safe, read-only APPLaunch companion UI for an existing, administrator-managed Pwnagotchi and bettercap installation. It shows status, nearby access points, clients, and handshakes. The package does not create, control, or replace system services; modify bettercap caplets; install Python packages; or write to /usr/local. A monitor-mode capable external USB Wi-Fi adapter is required; use only on networks and devices you own or are authorized to test.",
     "categories": [
       "Security",
-      "Networking",
-      "Utilities"
+      "Radio & Comms"
     ],
     "icon": "tools/assets/pwnagotchi.png",
     "screenshots": [
@@ -29,42 +30,26 @@
       "display_name": "JdaieLin"
     },
     "license": "MIT",
-    "source": {
-      "openness": "open-source",
-      "repository": "https://github.com/JdaieLin/cardputer-pwnagotchi"
-    },
+    "source_repo": "https://github.com/JdaieLin/cardputer-pwnagotchi",
+    "share_code": "PWNA",
     "permissions": {
+      "camera": false,
       "microphone": false,
-      "audio_output": false,
+      "imu": false,
       "network": true,
-      "filesystem": "app-data-and-handshakes",
-      "keyboard_input": true,
-      "background_service": true,
-      "external_hardware": true
-    },
-    "privacy": {
-      "collects_personal_data": false,
-      "data_retention": "local-only",
-      "third_party_sharing": false
+      "additional_hardware": true,
+      "background_service": false,
+      "external_display": false
     },
     "app": {
-      "service": true,
+      "service": false,
       "dependencies": [
-        "sudo",
         "python3",
-        "python3-pip",
         "python3-pil",
-        "curl",
-        "git",
         "fonts-noto-cjk",
         "fonts-noto-color-emoji",
-        "binutils",
         "iw",
-        "wireless-tools",
-        "rfkill",
-        "bettercap",
-        "bettercap-caplets",
-        "iptables"
+        "bettercap"
       ],
       "external_hardware": {
         "required": true,
@@ -90,13 +75,13 @@
     "locales": {
       "zh-CN": {
         "title": "Pwnagotchi",
-        "summary": "CardputerZero 上的 Pwnagotchi 状态、控制与握手仪表盘，需要外接支持 monitor mode 的 USB Wi-Fi 网卡。",
-        "description": "Pwnagotchi 将本地 pwnagotchi 与 bettercap 状态集成到 CardputerZero APPLaunch，提供 Home、Stats、Control 三个页面，以及 Start、Stop、Restart、Manual、Auto 控制。硬件限制：CM0 板载 Wi-Fi 不支持 monitor mode，不能用于抓包；本应用必须配合支持 monitor mode 的外接 USB Wi-Fi 网卡使用。实际测试通过的网卡为 TP-Link TL-WN722N v1.0 USB Wi-Fi adapter（Atheros AR9271 芯片）。"
+        "summary": "CardputerZero 上的只读 Pwnagotchi 状态与握手仪表盘，需要外接支持 monitor mode 的 USB Wi-Fi 网卡。",
+        "description": "这是面向已有、由管理员维护的 Pwnagotchi 与 bettercap 环境的安全只读 APPLaunch 伴侣界面，可查看状态、接入点、客户端和握手。安装包不会创建、控制或覆盖 systemd 服务，不会修改 bettercap caplet、安装系统 Python 包，也不会写入 /usr/local。需要支持 monitor mode 的外接 USB Wi-Fi 网卡；请仅在自己拥有或获准测试的网络和设备上使用。"
       },
       "en": {
         "title": "Pwnagotchi",
-        "summary": "Pwnagotchi status, control, and handshake dashboard for CardputerZero with an external monitor-mode USB Wi-Fi adapter.",
-        "description": "Pwnagotchi integrates local pwnagotchi and bettercap status into CardputerZero APPLaunch with Home, Stats, and Control pages plus Start, Stop, Restart, Manual, and Auto actions. Hardware limitation: the CM0 onboard Wi-Fi does not support monitor mode and cannot be used for packet capture. This app requires an external monitor-mode capable USB Wi-Fi adapter. Tested hardware: TP-Link TL-WN722N v1.0 USB Wi-Fi adapter (Atheros AR9271 chipset)."
+        "summary": "Read-only Pwnagotchi status and handshake dashboard for CardputerZero with an external monitor-mode USB Wi-Fi adapter.",
+        "description": "A safe, read-only APPLaunch companion UI for an existing, administrator-managed Pwnagotchi and bettercap installation. It shows status, access points, clients, and handshakes. Installation never creates, controls, or replaces system services; changes bettercap caplets; installs system Python packages; or writes to /usr/local. An external monitor-mode USB Wi-Fi adapter is required."
       }
     }
   }

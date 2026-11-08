@@ -23,14 +23,10 @@ Pwnagotchi APPLaunch client for CardputerZero, implemented in the same style as 
   - `bettercap` REST session endpoint
   - `config.toml`
   - handshake directory counts
-- Control actions:
-  - `Start`
-  - `Stop`
-  - `Restart`
-  - `Manual`
-  - `Auto`
+- Read-only dashboard behavior: service and mode changes are deliberately left
+  to the host administrator so the App Store package never mutates system
+  services or configuration.
 - APPLaunch `.deb` packaging
-- Bootstrap script for fresh `jayofelony/pwnagotchi` installs
 
 ## Hardware requirement
 
@@ -53,11 +49,10 @@ PWNAGOTCHI_MODE=auto
 PWNAGOTCHI_HANDSHAKES_FILE=/home/pi/handshakes/bettercap-wifi-handshakes.pcap
 ```
 
-At startup the wrapper enumerates wireless PHYs with `iw`, selects a
-monitor-mode capable interface, prefers USB adapters over the CM0 onboard
-Wi-Fi, and creates a monitor interface for bettercap. If you need to force a
-specific adapter, set `PWNAGOTCHI_SOURCE_IFACE` and optionally
-`PWNAGOTCHI_IFACE`, then restart `bettercap.service` and `pwnagotchi.service`.
+The App Store package does not create interfaces or alter system services. The
+host administrator is responsible for configuring the external adapter and
+the existing Pwnagotchi/bettercap installation. The dashboard only observes
+their state.
 
 ## Build
 
@@ -92,11 +87,10 @@ runner:
 gh workflow run build-deb.yml
 ```
 
-The generated `.deb` declares the required system packages and runs its
-post-install installer automatically. Users should not need to run a separate
-setup script after installing the package. The package also bundles the
-Pwnagotchi source archive used for bootstrap and the display fonts used by the
-APPLaunch UI.
+The generated `.deb` contains only the APPLaunch UI, bridge scripts, icon, and
+desktop entry. It has no maintainer scripts and performs no install-time
+network access, pip installation, systemd changes, caplet edits, or writes to
+`/usr/local`. Fonts come from declared Debian dependencies.
 
 Tagged pushes (`v*`) attach the `.deb` to the GitHub release. Pushes to `main`
 or `ci/**` publish a prerelease artifact for testing.
@@ -114,7 +108,7 @@ Recommended publish flow:
 gh workflow run build-deb.yml
 gh release download <release-tag> --pattern 'cardputerzero-pwnagotchi_*_arm64.deb' --dir build
 czdev login
-czdev publish --deb build/cardputerzero-pwnagotchi_0.1.1-m5stack1_arm64.deb
+czdev publish --deb build/cardputerzero-pwnagotchi_0.1.2-m5stack1_arm64.deb
 ```
 
 ## Environment
@@ -140,10 +134,12 @@ Supported variables:
 - [main/tools/display_bridge.py](/Users/jdaie/repositories/m5stack/cardputer-pwnagotchi/main/tools/display_bridge.py)
   Framebuffer rendering
 
-## Notes
+## Host integration
 
-- `Manual` / `Auto` switching is implemented through `/etc/default/pwnagotchi-cardputer` plus a systemd override wrapper installed by `tools/install.sh`.
-- On an existing device, run the packaged installer first so the service override exists before using mode switching.
+This package is intentionally read-only. Install and configure Pwnagotchi,
+bettercap, the monitor-mode interface, and any service permissions separately
+as an administrator. Control-page actions return an explanatory message rather
+than changing the host.
 
 ## License
 
